@@ -129,3 +129,16 @@ button.scan { border: 0 }
 .session-problem { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; gap: 10px; align-items: center; justify-content: space-between; background: #a53a2e; color: #fff; border-radius: 10px; padding: 10px 12px; font-weight: 600; font-size: .95rem }
 .session-problem.error { background: #9a5a1f }
 .session-problem button { background: #fff; color: #000; border: 0; min-height: 36px; padding: 6px 12px }
+
+/* Beheren van de lijst */
+.selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; background: var(--surface); border: 1px solid var(--bad); border-radius: 10px; padding: 10px 12px; font-weight: 600 }
+.selbar-q { color: var(--bad) }
+button.danger-fill { background: var(--bad); color: #fff; border-color: var(--bad) }
+th.chk, td.chk { width: 36px; padding-right: 0 }
+th.chk input, td.chk input { width: 18px; height: 18px; padding: 0; accent-color: var(--accent) }
+tr.sel td { background: color-mix(in srgb, var(--accent) 9%, var(--surface)) }
+.editable td.cell-edit { cursor: text }
+.editable td.cell-edit:hover { background: color-mix(in srgb, var(--accent) 6%, var(--surface)); box-shadow: inset 0 -2px 0 var(--accent) }
+td input { font-size: .86rem; padding: 4px 6px; min-width: 90px }
+tr.filters th { padding: 6px 6px 8px; border-bottom: 1px solid var(--line) }
+tr.filters input { font: 400 .8rem var(--f-body); padding: 5px 6px; min-width: 80px; text-transform: none; letter-spacing: 0 }

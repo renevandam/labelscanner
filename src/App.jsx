@@ -14,5 +14,31 @@ export default function App() {
 
   if (session === undefined) return <div className="boot">Laden…</div>
   if (!session) return <Login />
-  return <Scanner session={session} />
+  return <Member session={session} />
+}
+
+// Haalt de rol op (scanner of beheerder); wie geen lid is krijgt een duidelijke melding.
+function Member({ session }) {
+  const [role, setRole] = useState(undefined)
+  useEffect(() => {
+    supabase
+      .from('label_members')
+      .select('role')
+      .eq('user_id', session.user.id)
+      .maybeSingle()
+      .then(({ data }) => setRole(data?.role ?? null))
+  }, [session.user.id])
+
+  if (role === undefined) return <div className="boot">Laden…</div>
+  if (role === null)
+    return (
+      <main className="login">
+        <div className="login-card">
+          <h1>Geen toegang</h1>
+          <p className="sub">Je bent ingelogd als {session.user.email}, maar dit account heeft nog geen toegang tot de labelscanner. Vraag de beheerder om je toe te voegen.</p>
+          <button onClick={() => supabase.auth.signOut()}>Uitloggen</button>
+        </div>
+      </main>
+    )
+  return <Scanner session={session} role={role} />
 }

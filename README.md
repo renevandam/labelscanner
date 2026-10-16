@@ -16,6 +16,11 @@ Supabase-project: `yoyuwhhkonkggoscpofq` (voorheen Mobilient).
    select id from auth.users where email = 'naam@bedrijf.nl';
    ```
    Alleen accounts in `label_members` kunnen labels zien, opslaan of laten uitlezen.
+   Nieuwe leden zijn **scanner** (scannen en lijst bekijken). Beheerder maken (wijzigen en verwijderen):
+   ```sql
+   update public.label_members set role = 'editor'
+   where user_id = (select id from auth.users where email = 'naam@bedrijf.nl');
+   ```
 4. **Vercel**: importeer deze repo, framework Vite, en zet de env vars uit `.env.example`.
 
 ## Lokaal
