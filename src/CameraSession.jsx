@@ -3,7 +3,7 @@ import { openCamera, watchForBarcode, cameraError } from './lib/barcode.js'
 
 // Doorlopende camera: elke tik op de knop is een foto, de camera blijft open.
 // "Andere plank" schakelt hetzelfde beeld tijdelijk naar barcode-scannen.
-export default function CameraSession({ location, onLocation, onCapture, onClose, problem, onDismissProblem }) {
+export default function CameraSession({ location, onLocation, onCapture, onClose, problem, onDismissProblem, saved = 0, pending = 0 }) {
   const video = useRef(null)
   const [error, setError] = useState('')
   const [ready, setReady] = useState(false)
@@ -84,7 +84,10 @@ export default function CameraSession({ location, onLocation, onCapture, onClose
       </div>
 
       <div className="session-bottom">
-        <div className="session-count"><b>{count}</b> foto{count === 1 ? '' : "'s"}</div>
+        <div className="session-count">
+          <b>{count}</b> foto{count === 1 ? '' : "'s"}
+          <small>{saved} opgeslagen{pending ? ` · ${pending} te controleren` : ''}</small>
+        </div>
         <button
           className="shutter"
           onClick={shoot}

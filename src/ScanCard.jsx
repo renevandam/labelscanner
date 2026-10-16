@@ -104,10 +104,24 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
       } else {
         kind = 'ready'; msg = 'Gelezen. Controleer de velden en sla op.'
       }
+      const found = fields?.unit ? await checkDupe(fields.unit) : null
+
+      // Alles goed gelezen, locatie bekend en geen dubbele Unit#? Dan meteen opslaan.
+      if (kind === 'ready') {
+        const locatie = (scan.location || '').trim()
+        if (!found && locatie) {
+          if (await save(true, { ...fields, locatie }, true)) return
+          return // save() heeft de fout al op de kaart gezet
+        }
+        // Niet mee met "Alles opslaan": eerst zelf bekijken.
+        kind = 'check'
+        msg = found
+          ? 'Gelezen, maar Unit# staat al in de lijst. Controleer en sla op.'
+          : 'Gelezen, maar er is geen locatie. Vul de locatie in en sla op.'
+      }
       setState(kind)
       setMessage(msg)
       onStatus?.(scan.id, kind, msg)
-      if (fields?.unit) checkDupe(fields.unit)
     })()
   }, [file, userId]) // eslint-disable-line react-hooks/exhaustive-deps -- bewust één keer per foto
 
@@ -137,14 +151,17 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
 
   async function checkDupe(unit) {
     const u = unit.trim()
-    if (!u) return setDupe(null)
+    if (!u) { setDupe(null); return null }
     const { data } = await supabase.from('labels').select('id, created_at').eq('unit', u).limit(1)
-    setDupe(data?.[0] ?? null)
+    const hit = data?.[0] ?? null
+    setDupe(hit)
+    return hit
   }
 
   // Geeft true terug als de regel is opgeslagen. silent: geen eigen melding (bij "Alles opslaan").
-  async function save(silent = false) {
-    const { row, error } = toRow(form)
+  // values: optioneel de waarden om op te slaan (bij automatisch opslaan, vóór de state is bijgewerkt).
+  async function save(silent = false, values = null, auto = false) {
+    const { row, error } = toRow(values || form)
     if (error) {
       if (!silent) onToast(error)
       else { setState('error'); setMessage(error) }
@@ -159,7 +176,7 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
       return false
     }
     if (!silent) onToast('Opgeslagen')
-    onDone(scan.id, true)
+    onDone(scan.id, true, auto)
     return true
   }
 

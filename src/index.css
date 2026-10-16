@@ -198,3 +198,6 @@ tr.filters select { font: 400 .8rem var(--f-body); padding: 4px 6px; min-height:
 .operator { font-size: .85rem; color: var(--ink) }
 .chips { display: flex; flex-wrap: wrap; gap: 8px }
 .chip { min-height: 38px; padding: 6px 14px; border-radius: 999px; font-weight: 600 }
+
+.autosaved { margin: 0; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ok) 12%, var(--surface)); border: 1px solid var(--ok) }
+.session-count small { display: block; font-size: .75rem; color: #ccc }

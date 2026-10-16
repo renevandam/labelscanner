@@ -49,8 +49,10 @@ export default function Scanner({ session, role, name }) {
 
   // Na opslaan één keer herladen, ook als er (via "Alles opslaan") veel tegelijk binnenkomen.
   const reloadTimer = useRef()
-  function onScanDone(id, saved) {
+  const [autoSaved, setAutoSaved] = useState(0)
+  function onScanDone(id, saved, auto) {
     setScans((s) => s.filter((x) => x.id !== id))
+    if (auto) setAutoSaved((n) => n + 1)
     if (saved) {
       clearTimeout(reloadTimer.current)
       reloadTimer.current = setTimeout(() => setReloadKey((k) => k + 1), 800)
@@ -125,6 +127,13 @@ export default function Scanner({ session, role, name }) {
         </label>
       </div>
 
+      {autoSaved > 0 && (
+        <p className="autosaved" role="status">
+          <b>{autoSaved}</b> label{autoSaved === 1 ? '' : 's'} automatisch opgeslagen (alles goed gelezen).
+          {scans.length > 0 ? ' De kaarten hieronder moet je zelf controleren.' : ''}
+        </p>
+      )}
+
       {scans.length > 0 && (
         <section className="queue" aria-live="polite">
           <div className="queue-head">
@@ -147,7 +156,7 @@ export default function Scanner({ session, role, name }) {
       <LabelTable isEditor={isEditor} isCustomer={isCustomer} reloadKey={reloadKey} showToast={showToast} />
 
       {camera && (
-        <CameraSession problem={lastProblem} onDismissProblem={() => setLastProblem(null)} location={location} onLocation={setLocation} onCapture={onCapture} onClose={() => { setCamera(false); setLastProblem(null) }} />
+        <CameraSession saved={autoSaved} pending={scans.length} problem={lastProblem} onDismissProblem={() => setLastProblem(null)} location={location} onLocation={setLocation} onCapture={onCapture} onClose={() => { setCamera(false); setLastProblem(null) }} />
       )}
 
       {needsOperator && (!operator || askOperator) && (
