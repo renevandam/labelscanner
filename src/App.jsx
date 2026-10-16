@@ -20,13 +20,17 @@ export default function App() {
 // Haalt de rol op (scanner of beheerder); wie geen lid is krijgt een duidelijke melding.
 function Member({ session }) {
   const [role, setRole] = useState(undefined)
+  const [name, setName] = useState('')
   useEffect(() => {
     supabase
       .from('label_members')
-      .select('role')
+      .select('role, name')
       .eq('user_id', session.user.id)
       .maybeSingle()
-      .then(({ data }) => setRole(data?.role ?? null))
+      .then(({ data }) => {
+        setRole(data?.role ?? null)
+        setName(data?.name || '')
+      })
   }, [session.user.id])
 
   if (role === undefined) return <div className="boot">Laden…</div>
@@ -40,5 +44,5 @@ function Member({ session }) {
         </div>
       </main>
     )
-  return <Scanner session={session} role={role} />
+  return <Scanner session={session} role={role} name={name} />
 }

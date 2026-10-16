@@ -3,13 +3,13 @@ import { supabase, PHOTO_BUCKET } from './lib/supabase.js'
 import { FIELDS, formatNlDate, parseNlDate, parseQty } from './lib/labels.js'
 
 const PAGE = 100
-const COLS = 'id, locatie, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, created_at, scanned_by_email'
+const COLS = 'id, locatie, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, created_at, scanned_by, scanned_by_email'
 
 // Kolommen in de tabel: de stickervelden plus wanneer en door wie gescand.
 const COLUMNS = [
   ...FIELDS,
   { key: 'created_at', label: 'Gescand', type: 'stamp', readOnly: true },
-  { key: 'scanned_by_email', label: 'Door', type: 'text', readOnly: true },
+  { key: 'scanned_by_email', label: 'Door', type: 'person', readOnly: true },
 ]
 
 const like = (v) => `%${v.replace(/[%_\\]/g, (c) => '\\' + c)}%`
@@ -32,13 +32,20 @@ function dateRange(v) {
   return null
 }
 
-function applyFilters(q, search, filters) {
+function applyFilters(q, search, filters, people = {}) {
   const t = search.trim().replace(/[,%()*]/g, ' ').trim()
   if (t) q = q.or(['unit', 'project', 'intern_order', 'locatie'].map((c) => `${c}.ilike.*${t}*`).join(','))
   for (const col of COLUMNS) {
     const v = (filters[col.key] || '').trim()
     if (!v) continue
     if (col.type === 'text') q = q.ilike(col.key, like(v))
+    else if (col.type === 'person') {
+      // Zoek op naam (via de ledenlijst) of op e-mailadres.
+      const term = v.toLowerCase()
+      const ids = Object.entries(people).filter(([, n]) => n.toLowerCase().includes(term)).map(([id]) => id)
+      const safe = v.replace(/[,%()*]/g, ' ').trim()
+      q = q.or([`scanned_by_email.ilike.*${safe}*`, ids.length ? `scanned_by.in.(${ids.join(',')})` : null].filter(Boolean).join(','))
+    }
     else if (col.type === 'qty') {
       const n = parseQty(v)
       if (n != null && !Number.isNaN(n)) q = q.eq(col.key, n)
@@ -57,7 +64,8 @@ function applyFilters(q, search, filters) {
   return q
 }
 
-function display(col, r) {
+function display(col, r, people) {
+  if (col.type === 'person') return people[r.scanned_by] || r.scanned_by_email || ''
   const v = r[col.key]
   if (col.type === 'date') return formatNlDate(v)
   if (col.type === 'stamp') return new Date(v).toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' })
@@ -93,12 +101,22 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
   const [editing, setEditing] = useState(null) // { id, key, value }
   const [exporting, setExporting] = useState(false)
   const query = useRef({ search: '', filters: {} })
+  // Namen van leden (user_id → naam) voor de kolom "Door"; één kleine query.
+  const [people, setPeople] = useState({})
+  const peopleRef = useRef({})
+  useEffect(() => {
+    supabase.from('label_members').select('user_id, name').then(({ data }) => {
+      const map = Object.fromEntries((data || []).filter((m) => m.name).map((m) => [m.user_id, m.name]))
+      peopleRef.current = map
+      setPeople(map)
+    })
+  }, [reloadKey])
 
   const load = useCallback(async (offset = 0) => {
     setLoading(true)
     const { search, filters } = query.current
     let q = supabase.from('labels').select(COLS, { count: offset === 0 ? 'exact' : undefined })
-    q = applyFilters(q, search, filters).order('created_at', { ascending: false }).range(offset, offset + PAGE - 1)
+    q = applyFilters(q, search, filters, peopleRef.current).order('created_at', { ascending: false }).range(offset, offset + PAGE - 1)
     const { data, error, count } = await q
     setLoading(false)
     if (error) return showToast('Lijst laden mislukt: ' + error.message)
@@ -190,7 +208,7 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
       const all = []
       for (let from = 0; ; from += 1000) {
         let q = supabase.from('labels').select(COLS)
-        q = applyFilters(q, query.current.search, query.current.filters).order('created_at', { ascending: false }).range(from, from + 999)
+        q = applyFilters(q, query.current.search, query.current.filters, peopleRef.current).order('created_at', { ascending: false }).range(from, from + 999)
         const { data, error } = await q
         if (error) throw error
         all.push(...data)
@@ -198,7 +216,7 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
       }
       if (!all.length) return showToast('Er is niets om te exporteren')
       const { exportLabels } = await import('./lib/excel.js')
-      await exportLabels(all)
+      await exportLabels(all.map((r) => ({ ...r, door: people[r.scanned_by] || r.scanned_by_email || '' })))
     } catch (e) {
       showToast('Exporteren mislukt: ' + (e.message || e))
     } finally {
@@ -315,7 +333,7 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
                           inputMode={c.type === 'qty' ? 'decimal' : undefined}
                         />
                       ) : (
-                        display(c, r)
+                        display(c, r, people)
                       )}
                     </td>
                   )

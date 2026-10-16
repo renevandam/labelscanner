@@ -7,7 +7,7 @@ import ScanCard from './ScanCard.jsx'
 import LocationBar from './LocationBar.jsx'
 import CameraSession from './CameraSession.jsx'
 
-export default function Scanner({ session, role }) {
+export default function Scanner({ session, role, name }) {
   const isEditor = role === 'editor'
   const [reloadKey, setReloadKey] = useState(0)
   const [panel, setPanel] = useState(null) // 'users' | 'password'
@@ -83,7 +83,7 @@ export default function Scanner({ session, role }) {
           <p className="sub">Fotografeer een doossticker, controleer de velden, exporteer naar Excel.</p>
         </div>
         <div className="who">
-          <span>{session.user.email}{isEditor ? ' · beheerder' : ''}</span>
+          <span title={session.user.email}>{name || session.user.email}{isEditor ? ' · beheerder' : ''}</span>
           {isEditor && <button className="link" onClick={() => setPanel('users')}>Gebruikers</button>}
           <button className="link" onClick={() => setPanel('password')}>Wachtwoord</button>
           <button className="link" onClick={() => supabase.auth.signOut()}>Uitloggen</button>

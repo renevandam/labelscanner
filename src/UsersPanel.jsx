@@ -27,6 +27,7 @@ export default function UsersPanel({ me, onClose }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [email, setEmail] = useState('')
+  const [newName, setNewName] = useState('')
   const [role, setRole] = useState('scanner')
   const [secret, setSecret] = useState(null) // { email, password }
   const [confirmRemove, setConfirmRemove] = useState(null)
@@ -52,9 +53,10 @@ export default function UsersPanel({ me, onClose }) {
   async function add(e) {
     e.preventDefault()
     const addr = email.trim()
-    const data = await run({ action: 'add', email: addr, role })
+    const data = await run({ action: 'add', email: addr, role, name: newName })
     if (!data) return
     setEmail('')
+    setNewName('')
     setSecret(data.password ? { email: addr.toLowerCase(), password: data.password, isNew: true } : null)
   }
 
@@ -80,6 +82,10 @@ export default function UsersPanel({ me, onClose }) {
         </div>
 
         <form className="add-user" onSubmit={add}>
+          <label className="name-field">
+            Naam
+            <input id="new-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="bv. Gert" maxLength={60} autoComplete="off" />
+          </label>
           <label>
             E-mailadres
             <input id="new-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="naam@bedrijf.nl" autoComplete="off" />
@@ -93,7 +99,7 @@ export default function UsersPanel({ me, onClose }) {
           </label>
           <button className="primary" disabled={busy}>Toegang geven</button>
         </form>
-        <p className="hint">Scanner: scannen en de lijst bekijken. Beheerder: ook wijzigen, verwijderen en gebruikers beheren.</p>
+        <p className="hint">De naam zie je in de lijst bij "Door" en in de Excel. Klik op een naam in de tabel om hem te wijzigen. Scanner: scannen en de lijst bekijken. Beheerder: ook wijzigen, verwijderen en gebruikers beheren.</p>
 
         {secret && (
           <div className="secret" role="status">
@@ -116,14 +122,31 @@ export default function UsersPanel({ me, onClose }) {
         <div className="tablebox">
           <table className="users">
             <thead>
-              <tr><th>E-mail</th><th>Rol</th><th>Laatst ingelogd</th><th></th></tr>
+              <tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Laatst ingelogd</th><th></th></tr>
             </thead>
             <tbody>
-              {members === null && <tr><td colSpan={4} className="empty">Laden…</td></tr>}
+              {members === null && <tr><td colSpan={5} className="empty">Laden…</td></tr>}
               {members?.map((m) => {
                 const self = m.user_id === me
                 return (
                   <tr key={m.user_id}>
+                    <td>
+                      <input
+                        key={m.name || ''}
+                        id={`name-${m.user_id}`}
+                        className="name-input"
+                        aria-label={`Naam van ${m.email}`}
+                        defaultValue={m.name || ''}
+                        placeholder="naam invullen"
+                        maxLength={60}
+                        disabled={busy}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim()
+                          if (v !== (m.name || '')) run({ action: 'set_name', user_id: m.user_id, name: v })
+                        }}
+                        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                      />
+                    </td>
                     <td>{m.email}{self && <span className="you"> (jij)</span>}</td>
                     <td>
                       {self ? ROLE_LABEL[m.role] : (

@@ -1,5 +1,5 @@
 // Gebruikersbeheer voor de labelscanner. Alleen beheerders (role = 'editor') mogen dit aanroepen.
-// Acties: list | add { email, role } | set_role { user_id, role } | reset_password { user_id } | remove { user_id }
+// Acties: list | add { email, role, name } | set_name { user_id, name } | set_role { user_id, role } | reset_password { user_id } | remove { user_id }
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -37,7 +37,11 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let body: { action?: string; email?: string; role?: string; user_id?: string };
+  let body: { action?: string; email?: string; role?: string; user_id?: string; name?: string };
+  const cleanName = (v: unknown) => {
+    const n = String(v ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+    return n || null;
+  };
   try {
     body = await req.json();
   } catch {
@@ -45,7 +49,7 @@ Deno.serve(async (req) => {
   }
 
   const list = async () => {
-    const { data, error } = await admin.rpc("label_members_list");
+    const { data, error } = await admin.rpc("label_members_overview");
     if (error) throw error;
     return data;
   };
@@ -68,9 +72,19 @@ Deno.serve(async (req) => {
           if (error) return json({ error: "create_failed", message: error.message }, 400);
           userId = data.user.id;
         }
-        const { error } = await admin.from("label_members").upsert({ user_id: userId, role }, { onConflict: "user_id" });
+        const row: Record<string, unknown> = { user_id: userId, role };
+        const name = cleanName(body.name);
+        if (name) row.name = name;
+        const { error } = await admin.from("label_members").upsert(row, { onConflict: "user_id" });
         if (error) throw error;
         return json({ members: await list(), created: !!password, password });
+      }
+
+      case "set_name": {
+        if (!body.user_id) return json({ error: "bad_request" }, 400);
+        const { error } = await admin.from("label_members").update({ name: cleanName(body.name) }).eq("user_id", body.user_id);
+        if (error) throw error;
+        return json({ members: await list() });
       }
 
       case "set_role": {

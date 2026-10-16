@@ -11,7 +11,7 @@ export async function exportLabels(rows) {
       return { column: f.label, type: String, width: f.key === 'notitie' ? 22 : 15, value: (r) => r[f.key] ?? undefined }
     }),
     { column: 'Gescand op', type: Date, format: 'd-m-yyyy hh:mm', width: 17, value: (r) => new Date(r.created_at) },
-    { column: 'Gescand door', type: String, width: 24, value: (r) => r.scanned_by_email ?? undefined },
+    { column: 'Gescand door', type: String, width: 24, value: (r) => r.door || r.scanned_by_email || undefined },
   ]
   const name = `labels-${new Date().toISOString().slice(0, 10)}.xlsx`
   await writeXlsxFile(rows, { schema, fileName: name, sheet: 'Labels', stickyRowsCount: 1, fontFamily: 'Calibri', fontSize: 11 })
