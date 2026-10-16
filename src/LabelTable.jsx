@@ -4,10 +4,11 @@ import { FIELDS, formatNlDate, parseNlDate, parseQty } from './lib/labels.js'
 import ImportNotes from './ImportNotes.jsx'
 
 const PAGE = 100
-const COLS = 'id, locatie, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, klant_notitie, created_at, scanned_by, scanned_by_email'
+const COLS = 'id, locatie, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, klant_notitie, actief, operator, created_at, scanned_by, scanned_by_email'
 
 // Kolommen in de tabel: de stickervelden plus wanneer en door wie gescand.
 const COLUMNS = [
+  { key: 'actief', label: 'Actief', type: 'bool', readOnly: true },
   ...FIELDS,
   { key: 'klant_notitie', label: 'Notitie klant', type: 'text' },
   { key: 'created_at', label: 'Gescand', type: 'stamp', readOnly: true },
@@ -40,13 +41,17 @@ function applyFilters(q, search, filters, people = {}) {
   for (const col of COLUMNS) {
     const v = (filters[col.key] || '').trim()
     if (!v) continue
-    if (col.type === 'text') q = q.ilike(col.key, like(v))
+    if (col.type === 'bool') {
+      if (v === 'ja') q = q.eq(col.key, true)
+      else if (v === 'nee') q = q.eq(col.key, false)
+    }
+    else if (col.type === 'text') q = q.ilike(col.key, like(v))
     else if (col.type === 'person') {
-      // Zoek op naam (via de ledenlijst) of op e-mailadres.
+      // Zoek op operator, naam (via de ledenlijst) of e-mailadres.
       const term = v.toLowerCase()
       const ids = Object.entries(people).filter(([, n]) => n.toLowerCase().includes(term)).map(([id]) => id)
       const safe = v.replace(/[,%()*]/g, ' ').trim()
-      q = q.or([`scanned_by_email.ilike.*${safe}*`, ids.length ? `scanned_by.in.(${ids.join(',')})` : null].filter(Boolean).join(','))
+      q = q.or([`operator.ilike.*${safe}*`, `scanned_by_email.ilike.*${safe}*`, ids.length ? `scanned_by.in.(${ids.join(',')})` : null].filter(Boolean).join(','))
     }
     else if (col.type === 'qty') {
       const n = parseQty(v)
@@ -66,8 +71,13 @@ function applyFilters(q, search, filters, people = {}) {
   return q
 }
 
+// Wie scande: de operator (bij gedeelde scanner-accounts), anders de naam van het account.
+function who(r, people, hideEmail) {
+  return r.operator || people[r.scanned_by] || (hideEmail ? '' : r.scanned_by_email) || ''
+}
+
 function display(col, r, people, hideEmail) {
-  if (col.type === 'person') return people[r.scanned_by] || (hideEmail ? '' : r.scanned_by_email) || ''
+  if (col.type === 'person') return who(r, people, hideEmail)
   const v = r[col.key]
   if (col.type === 'date') return formatNlDate(v)
   if (col.type === 'stamp') return new Date(v).toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' })
@@ -103,6 +113,9 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
   const [deleting, setDeleting] = useState(false)
   const [editing, setEditing] = useState(null) // { id, key, value }
   const [exporting, setExporting] = useState(false)
+  const [settingActive, setSettingActive] = useState(false)
+  // Beheerder en klant mogen Actief omzetten en dus ook regels selecteren.
+  const canToggle = isEditor || isCustomer
   const query = useRef({ search: '', filters: {} })
 
   // Schuifbalk boven de tabel die gelijk loopt met de onderste.
@@ -204,6 +217,20 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
     showToast(`${ids.length} regel${ids.length === 1 ? '' : 's'} verwijderd`)
   }
 
+  async function setActive(ids, active) {
+    if (!ids.length) return
+    setSettingActive(true)
+    const { error } = await supabase.rpc('label_set_active', { p_ids: ids, p_active: active })
+    setSettingActive(false)
+    if (error) return showToast('Wijzigen mislukt: ' + error.message)
+    const set = new Set(ids)
+    setRows((rs) => rs.map((r) => (set.has(r.id) ? { ...r, actief: active } : r)))
+    if (ids.length > 1) {
+      showToast(`${ids.length} regels op ${active ? 'actief' : 'inactief'} gezet`)
+      setSelected(new Set())
+    }
+  }
+
   function startEdit(r, col) {
     if (!isEditor || col.readOnly) return
     const v = col.type === 'date' ? formatNlDate(r[col.key]) : r[col.key] ?? ''
@@ -246,7 +273,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
       }
       if (!all.length) return showToast('Er is niets om te exporteren')
       const { exportLabels } = await import('./lib/excel.js')
-      await exportLabels(all.map((r) => ({ ...r, door: people[r.scanned_by] || (isCustomer ? '' : r.scanned_by_email) || '', scanned_by_email: isCustomer ? null : r.scanned_by_email })))
+      await exportLabels(all.map((r) => ({ ...r, door: who(r, people, isCustomer), scanned_by_email: isCustomer ? null : r.scanned_by_email })))
     } catch (e) {
       showToast('Exporteren mislukt: ' + (e.message || e))
     } finally {
@@ -254,7 +281,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
     }
   }
 
-  const colCount = COLUMNS.length + 1 + (isEditor ? 1 : 0)
+  const colCount = COLUMNS.length + 1 + (canToggle ? 1 : 0)
 
   return (
     <section className="list">
@@ -282,10 +309,18 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
         />
       )}
 
-      {isEditor && selected.size > 0 && (
+      {canToggle && selected.size > 0 && (
         <div className="selbar" role="region" aria-label="Selectie">
           <span>{selected.size} geselecteerd</span>
-          {confirming ? (
+          {!confirming && (
+            <>
+              <button onClick={() => setActive([...selected], true)} disabled={settingActive}>Actief</button>
+              <button onClick={() => setActive([...selected], false)} disabled={settingActive}>Inactief</button>
+            </>
+          )}
+          {!isEditor ? (
+            <button onClick={() => setSelected(new Set())}>Selectie wissen</button>
+          ) : confirming ? (
             <>
               <span className="selbar-q">Definitief verwijderen, inclusief foto's?</span>
               <button className="danger-fill" onClick={deleteSelected} disabled={deleting}>{deleting ? 'Verwijderen…' : 'Ja, verwijder'}</button>
@@ -309,7 +344,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
         <table className={isEditor ? 'editable' : undefined}>
           <thead>
             <tr>
-              {isEditor && (
+              {canToggle && (
                 <th className="chk">
                   <input type="checkbox" id="select-all" aria-label="Alles selecteren" checked={allChecked} onChange={toggleAll} />
                 </th>
@@ -319,9 +354,16 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
             </tr>
             {showFilters && (
               <tr className="filters">
-                {isEditor && <th />}
+                {canToggle && <th />}
                 {COLUMNS.map((c) => (
                   <th key={c.key}>
+                    {c.type === 'bool' ? (
+                      <select id={`filter-${c.key}`} aria-label={`Filter ${c.label}`} value={filters[c.key] || ''} onChange={(e) => setFilter(c.key, e.target.value)}>
+                        <option value="">alle</option>
+                        <option value="ja">ja</option>
+                        <option value="nee">nee</option>
+                      </select>
+                    ) : (
                     <input
                       id={`filter-${c.key}`}
                       aria-label={`Filter ${c.label}`}
@@ -330,6 +372,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
                       placeholder={c.type === 'date' || c.type === 'stamp' ? 'd-m-jjjj' : c.type === 'qty' ? '=' : 'bevat…'}
                       inputMode={c.type === 'qty' ? 'decimal' : undefined}
                     />
+                    )}
                   </th>
                 ))}
                 <th>
@@ -349,8 +392,8 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
               </tr>
             )}
             {rows.map((r) => (
-              <tr key={r.id} className={selected.has(r.id) ? 'sel' : undefined}>
-                {isEditor && (
+              <tr key={r.id} className={[selected.has(r.id) && 'sel', r.actief === false && 'inactive'].filter(Boolean).join(' ') || undefined}>
+                {canToggle && (
                   <td className="chk">
                     <input type="checkbox" id={`sel-${r.id}`} aria-label="Selecteer regel" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                   </td>
@@ -376,6 +419,19 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
                           }}
                           inputMode={c.type === 'qty' ? 'decimal' : undefined}
                         />
+                      ) : c.type === 'bool' ? (
+                        canToggle ? (
+                          <button
+                            className={`toggle ${r.actief ? 'on' : 'off'}`}
+                            role="switch"
+                            aria-checked={!!r.actief}
+                            aria-label={`Actief: ${r.actief ? 'ja' : 'nee'}`}
+                            disabled={settingActive}
+                            onClick={(e) => { e.stopPropagation(); setActive([r.id], !r.actief) }}
+                          >
+                            {r.actief ? 'Ja' : 'Nee'}
+                          </button>
+                        ) : (r.actief ? 'Ja' : 'Nee')
                       ) : (
                         display(c, r, people, isCustomer)
                       )}

@@ -151,7 +151,7 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
       return false
     }
     setSaving(true)
-    const { error: dbErr } = await supabase.from('labels').insert({ ...row, photo_path: photoPath.current })
+    const { error: dbErr } = await supabase.from('labels').insert({ ...row, photo_path: photoPath.current, operator: scan.operator || null })
     setSaving(false)
     if (dbErr) {
       if (!silent) onToast('Opslaan mislukt: ' + dbErr.message)

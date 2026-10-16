@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase.js'
 import LabelTable from './LabelTable.jsx'
 import UsersPanel from './UsersPanel.jsx'
 import PasswordPanel from './PasswordPanel.jsx'
+import OperatorPrompt from './OperatorPrompt.jsx'
 import ScanCard from './ScanCard.jsx'
 import LocationBar from './LocationBar.jsx'
 import CameraSession from './CameraSession.jsx'
@@ -10,6 +11,16 @@ import CameraSession from './CameraSession.jsx'
 export default function Scanner({ session, role, name }) {
   const isEditor = role === 'editor'
   const isCustomer = role === 'customer'
+  // Scanner-accounts zijn gedeeld: vraag bij het openen wie er scant (geldt tot de app/tab sluit).
+  const needsOperator = role === 'scanner'
+  const [operator, setOperatorState] = useState(() => {
+    try { return sessionStorage.getItem('labelscanner.operator') || '' } catch { return '' }
+  })
+  const [askOperator, setAskOperator] = useState(false)
+  const setOperator = useCallback((v) => {
+    setOperatorState(v)
+    try { sessionStorage.setItem('labelscanner.operator', v) } catch { /* privé-modus */ }
+  }, [])
   const [reloadKey, setReloadKey] = useState(0)
   const [panel, setPanel] = useState(null) // 'users' | 'password'
   const [scans, setScans] = useState([])
@@ -33,7 +44,7 @@ export default function Scanner({ session, role, name }) {
     const files = [...e.target.files]
     e.target.value = ''
     if (!location) showToast('Let op: geen locatie ingesteld. Vul hem in bij de doos of scan eerst de plank.')
-    setScans((s) => [...files.map((file) => ({ id: crypto.randomUUID(), file, location })), ...s])
+    setScans((s) => [...files.map((file) => ({ id: crypto.randomUUID(), file, location, operator })), ...s])
   }
 
   // Na opslaan één keer herladen, ook als er (via "Alles opslaan") veel tegelijk binnenkomen.
@@ -73,7 +84,7 @@ export default function Scanner({ session, role, name }) {
     }
   }, [])
   function onCapture(file) {
-    setScans((s) => [{ id: crypto.randomUUID(), file, location }, ...s])
+    setScans((s) => [{ id: crypto.randomUUID(), file, location, operator }, ...s])
   }
 
   return (
@@ -88,10 +99,13 @@ export default function Scanner({ session, role, name }) {
           </p>
         </div>
         <div className="who">
+          {needsOperator && operator && (
+            <span className="operator">Operator: <b>{operator}</b> <button className="link" onClick={() => setAskOperator(true)}>Wissel</button></span>
+          )}
           <span title={session.user.email}>{name || session.user.email}{isEditor ? ' · beheerder' : isCustomer ? ' · klant' : ''}</span>
           {isEditor && <button className="link" onClick={() => setPanel('users')}>Gebruikers</button>}
           <button className="link" onClick={() => setPanel('password')}>Wachtwoord</button>
-          <button className="link" onClick={() => supabase.auth.signOut()}>Uitloggen</button>
+          <button className="link" onClick={() => { try { sessionStorage.removeItem('labelscanner.operator') } catch { /* */ } supabase.auth.signOut() }}>Uitloggen</button>
         </div>
       </header>
 
@@ -134,6 +148,16 @@ export default function Scanner({ session, role, name }) {
 
       {camera && (
         <CameraSession problem={lastProblem} onDismissProblem={() => setLastProblem(null)} location={location} onLocation={setLocation} onCapture={onCapture} onClose={() => { setCamera(false); setLastProblem(null) }} />
+      )}
+
+      {needsOperator && (!operator || askOperator) && (
+        <OperatorPrompt
+          current={operator}
+          account={name || session.user.email}
+          onSet={(v) => { setOperator(v); setAskOperator(false) }}
+          onCancel={operator ? () => setAskOperator(false) : null}
+          onLogout={() => { try { sessionStorage.removeItem('labelscanner.operator') } catch { /* */ } supabase.auth.signOut() }}
+        />
       )}
 
       {panel === 'users' && <UsersPanel me={session.user.id} onClose={() => setPanel(null)} />}

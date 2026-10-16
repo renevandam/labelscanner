@@ -3,6 +3,8 @@ import { FIELDS } from './labels.js'
 
 export async function exportLabels(rows) {
   const schema = [
+    // Echte TRUE/FALSE-cel (Nederlandse Excel toont WAAR/ONWAAR)
+    { column: 'Actief', type: Boolean, width: 8, value: (r) => r.actief !== false },
     ...FIELDS.map((f) => {
       if (f.type === 'date')
         return { column: f.label, type: Date, format: 'd-m-yyyy', width: 11, value: (r) => (r[f.key] ? new Date(r[f.key] + 'T00:00:00Z') : undefined) }
