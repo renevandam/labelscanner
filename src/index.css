@@ -220,8 +220,16 @@ tr.filters select { font: 400 .8rem var(--f-body); padding: 4px 6px; min-height:
 /* Laatste scans (scanner) */
 .recent { display: grid; gap: 8px }
 .recent ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface) }
-.recent li { display: grid; grid-template-columns: 52px 1fr auto auto; gap: 10px; align-items: baseline; padding: 10px 12px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+.recent li { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line) }
 .recent li:last-child { border-bottom: 0 }
-.recent .r-time { color: var(--muted); font-size: .85rem }
-.recent .r-unit { font-weight: 600; min-width: 0; overflow-wrap: anywhere }
-.recent .r-loc, .recent .r-qty { color: var(--muted); font-size: .85rem }
+.r-thumb { width: 56px; height: 56px; padding: 0; min-height: 0; border-radius: 6px; overflow: hidden; display: grid; place-items: center; color: var(--muted) }
+.r-thumb img { width: 100%; height: 100%; object-fit: cover; display: block }
+.r-main { display: grid; gap: 2px; min-width: 0 }
+.recent .r-unit { font: 600 1rem var(--f-mono); overflow-wrap: anywhere }
+.r-sub { color: var(--muted); font: .82rem var(--f-mono); font-variant-numeric: tabular-nums }
+.lightbox { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.9); display: grid; grid-template-rows: 1fr auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); gap: 10px }
+.lightbox img { width: 100%; height: 100%; object-fit: contain; min-height: 0 }
+.lightbox-info { background: var(--surface); color: var(--ink); border-radius: 10px; padding: 12px; display: grid; gap: 10px }
+.lightbox-info dl { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px 12px }
+.lightbox-info dt { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted) }
+.lightbox-info dd { margin: 0; font-family: var(--f-mono); overflow-wrap: anywhere }
