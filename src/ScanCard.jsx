@@ -3,14 +3,24 @@ import { supabase, PHOTO_BUCKET } from './lib/supabase.js'
 import { FIELDS, emptyLabel, toRow } from './lib/labels.js'
 import { shrinkImage, blobToBase64 } from './lib/image.js'
 
+// Max. 3 labels tegelijk laten uitlezen; de rest wacht netjes op zijn beurt.
+let active = 0
+const waiting = []
+async function limited(fn) {
+  if (active >= 3) await new Promise((r) => waiting.push(r))
+  active++
+  try { return await fn() } finally { active--; waiting.shift()?.() }
+}
+
 // Eén gescande foto: verkleinen → uploaden + laten uitlezen → controleren → opslaan.
-export default function ScanCard({ scan, userId, onDone, onToast }) {
+export default function ScanCard({ scan, userId, onDone, onToast, onReady, onStatus }) {
   const [state, setState] = useState('busy') // busy | ready | error
   const [message, setMessage] = useState('Label lezen')
   const [form, setForm] = useState(() => ({ ...emptyLabel(), locatie: scan.location || '' }))
   const [preview, setPreview] = useState('')
   const [saving, setSaving] = useState(false)
   const [dupe, setDupe] = useState(null)
+  const [doubt, setDoubt] = useState(() => new Set())
   const photoPath = useRef(null)
   const started = useRef(false)
 
@@ -38,29 +48,50 @@ export default function ScanCard({ scan, userId, onDone, onToast }) {
         .upload(path, blob, { contentType: 'image/jpeg' })
         .then(({ error }) => { if (!error) photoPath.current = path })
 
-      const read = supabase.functions
-        .invoke('read-label', { body: { image: await blobToBase64(blob), mediaType: 'image/jpeg' } })
+      const image = await blobToBase64(blob)
+      const read = limited(() => supabase.functions.invoke('read-label', { body: { image, mediaType: 'image/jpeg' } }))
         .then(({ data, error }) => {
           if (error || !data?.fields) throw error || new Error('leeg antwoord')
           const f = emptyLabel()
           for (const k of Object.keys(f)) f[k] = data.fields[k] == null ? '' : String(data.fields[k])
           // Locatie komt van de plank-scan, niet van de sticker; eventuele handmatige wijziging blijft staan.
           setForm((prev) => ({ ...f, locatie: prev.locatie }))
-          const filled = FIELDS.some((x) => f[x.key])
-          setState('ready')
-          setMessage(filled ? 'Gelezen. Controleer de velden en sla op.' : 'Niets herkend. Vul de velden zelf in.')
-          return f
+          setDoubt(new Set(Array.isArray(data.twijfel) ? data.twijfel : []))
+          return { fields: f, status: data.status, reden: data.reden || '', twijfel: data.twijfel || [] }
         })
-        .catch(() => {
-          setState('error')
-          setMessage('Automatisch lezen mislukt. Vul de velden zelf in.')
-          return null
-        })
+        .catch(() => null)
 
-      const [, fields] = await Promise.all([upload, read])
+      // Pas klaar als foto én uitlezen klaar zijn, zodat opslaan altijd de foto meeneemt.
+      const [, res] = await Promise.all([upload, read])
+      const fields = res?.fields
+      const filled = fields && ['project', 'intern_order', 'unit'].some((k) => fields[k])
+      let kind, msg
+      if (!res) {
+        kind = 'error'; msg = 'Automatisch lezen mislukt. Vul de velden zelf in.'
+      } else if (res.status === 'ander_label') {
+        kind = 'wrong'; msg = `Verkeerd label: ${res.reden || 'dit is geen TKE/SLS-doossticker'}.`
+      } else if (res.status === 'onleesbaar' || !filled) {
+        kind = 'error'; msg = `Niet leesbaar${res.reden ? ': ' + res.reden : ''}. Maak een nieuwe foto of vul zelf in.`
+      } else if (res.twijfel.length) {
+        kind = 'check'; msg = 'Gelezen, maar controleer de oranje velden.'
+      } else {
+        kind = 'ready'; msg = 'Gelezen. Controleer de velden en sla op.'
+      }
+      setState(kind)
+      setMessage(msg)
+      onStatus?.(scan.id, kind, msg)
       if (fields?.unit) checkDupe(fields.unit)
     })()
-  }, [scan.file, userId])
+  }, [scan.file, userId]) // eslint-disable-line react-hooks/exhaustive-deps -- bewust één keer per foto
+
+  // Meld bruikbare kaarten aan bij "Alles opslaan"; altijd met de laatste formulierwaarden.
+  const saveRef = useRef(null)
+  saveRef.current = () => save(true)
+  useEffect(() => {
+    if (state !== 'ready') return
+    onReady(scan.id, () => saveRef.current())
+    return () => onReady(scan.id, null)
+  }, [state, scan.id, onReady])
 
   async function checkDupe(unit) {
     const u = unit.trim()
@@ -69,15 +100,25 @@ export default function ScanCard({ scan, userId, onDone, onToast }) {
     setDupe(data?.[0] ?? null)
   }
 
-  async function save() {
+  // Geeft true terug als de regel is opgeslagen. silent: geen eigen melding (bij "Alles opslaan").
+  async function save(silent = false) {
     const { row, error } = toRow(form)
-    if (error) return onToast(error)
+    if (error) {
+      if (!silent) onToast(error)
+      else { setState('error'); setMessage(error) }
+      return false
+    }
     setSaving(true)
     const { error: dbErr } = await supabase.from('labels').insert({ ...row, photo_path: photoPath.current })
     setSaving(false)
-    if (dbErr) return onToast('Opslaan mislukt: ' + dbErr.message)
-    onToast('Opgeslagen')
+    if (dbErr) {
+      if (!silent) onToast('Opslaan mislukt: ' + dbErr.message)
+      else { setState('error'); setMessage('Opslaan mislukt: ' + dbErr.message) }
+      return false
+    }
+    if (!silent) onToast('Opgeslagen')
     onDone(scan.id, true)
+    return true
   }
 
   async function discard() {
@@ -85,20 +126,24 @@ export default function ScanCard({ scan, userId, onDone, onToast }) {
     onDone(scan.id, false)
   }
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const set = (k) => (e) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }))
+    if (doubt.has(k)) setDoubt((d) => { const n = new Set(d); n.delete(k); return n })
+  }
 
   return (
-    <article className="card">
+    <article className={`card ${state}`}>
       {preview && <img src={preview} alt="Foto van het label" />}
       <div className="card-body">
-        <div className={`state ${state === 'busy' ? 'busy' : state === 'error' ? 'err' : 'ok'}`}>{message}</div>
+        <div className={`state ${state === 'busy' ? 'busy' : state === 'ready' ? 'ok' : state === 'check' ? 'warn' : 'err'}`}>{message}</div>
         {state !== 'busy' && (
           <>
             <div className="fields">
               {FIELDS.map((f) => (
-                <label key={f.key}>
+                <label key={f.key} className={doubt.has(f.key) ? 'doubt' : undefined}>
                   {f.label}
                   <input
+                    className={doubt.has(f.key) ? 'doubt' : undefined}
                     id={`${scan.id}-${f.key}`}
                     value={form[f.key]}
                     onChange={set(f.key)}
@@ -116,8 +161,17 @@ export default function ScanCard({ scan, userId, onDone, onToast }) {
               </p>
             )}
             <div className="row-actions">
-              <button className="primary" onClick={save} disabled={saving}>{saving ? 'Opslaan…' : 'Opslaan in lijst'}</button>
-              <button onClick={discard} disabled={saving}>Weggooien</button>
+              {state === 'wrong' ? (
+                <>
+                  <button className="primary" onClick={discard} disabled={saving}>Weggooien</button>
+                  <button onClick={() => save(false)} disabled={saving}>Toch opslaan</button>
+                </>
+              ) : (
+                <>
+                  <button className="primary" onClick={() => save(false)} disabled={saving}>{saving ? 'Opslaan…' : 'Opslaan in lijst'}</button>
+                  <button onClick={discard} disabled={saving}>Weggooien</button>
+                </>
+              )}
             </div>
           </>
         )}

@@ -14,17 +14,26 @@ const json = (body: unknown, status = 200) =>
 
 const KEYS = ["project", "intern_order", "unit", "datum", "coordinator", "doos", "lengte", "pallet", "rol", "kabel", "notitie"];
 
-const PROMPT = `Dit is een foto van een verzendlabel (TKE / SLS) op een doos. Lees de ingevulde waarden uit.
-Antwoord met ALLEEN een JSON-object met precies deze sleutels, alle waarden als string ("" als leeg of onleesbaar):
-{"project":"","intern_order":"","unit":"","datum":"","coordinator":"","doos":"","lengte":"","pallet":"","rol":"","kabel":"","notitie":""}
+const PROMPT = `Je krijgt een foto die een medewerker in een magazijn heeft gemaakt. De bedoeling is een verzendlabel van TKE (met SLS-logo) op een doos: een wit label met de velden Project#, Intern order#, Unit#, Datum, Coordinator en daaronder "Verpakking" met lijnen voor DOOS, LENGTE, PALLET, ROL, KABEL.
+
+Beoordeel eerst de foto:
+- "ander_label": de foto toont iets anders dan zo'n TKE/SLS-label (ander soort sticker, pakbon, verzendlabel van een vervoerder, geen label in beeld).
+- "onleesbaar": het is wel zo'n label maar Project#, Intern order# of Unit# is niet betrouwbaar te lezen (onscherp, te donker, schittering, deels buiten beeld, te ver weg).
+- "ok": het label is goed te lezen.
+
+Antwoord met ALLEEN een JSON-object, zonder uitleg eromheen:
+{"status":"ok","reden":"","twijfel":[],"project":"","intern_order":"","unit":"","datum":"","coordinator":"","doos":"","lengte":"","pallet":"","rol":"","kabel":"","notitie":""}
+
+- reden: bij "ander_label" of "onleesbaar" een korte Nederlandse uitleg voor de medewerker (max 8 woorden, bv "foto is onscherp", "onderkant label valt buiten beeld", "dit is een DHL-verzendlabel"). Anders "".
+- twijfel: lijst met de sleutels van velden die je wel hebt ingevuld maar waarvan je niet zeker bent (bv ["doos","datum"]).
 - project: waarde bij "Project#", spaties behouden zoals gedrukt (bv "2022 821601")
 - intern_order: waarde bij "Intern order#"
 - unit: waarde bij "Unit#", hoofd-/kleine letters zoals gedrukt (bv "nl0802372")
 - datum: waarde bij "Datum" als dag-maand-jaar (bv "11-4-2024")
 - coordinator: waarde bij "Coordinator"
-- doos/lengte/pallet/rol/kabel: het (meestal handgeschreven) getal op de lijn vóór dat woord onder "Verpakking"; alleen cijfers
+- doos/lengte/pallet/rol/kabel: het (meestal handgeschreven) getal op de lijn vóór dat woord onder "Verpakking"; alleen cijfers, "" als de lijn leeg is
 - notitie: overige handgeschreven tekst op het label (bv paraaf + datum onderaan)
-Verzin niets. Is de foto geen dergelijk label, geef dan alle velden "".`;
+Alle veldwaarden zijn strings. Verzin niets: wat je niet kunt lezen laat je "". Bij "ander_label" laat je alle velden "".`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -56,7 +65,7 @@ Deno.serve(async (req) => {
     headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: Deno.env.get("LABEL_MODEL") ?? "claude-sonnet-5-5",
-      max_tokens: 600,
+      max_tokens: 800,
       messages: [{
         role: "user",
         content: [
@@ -82,5 +91,8 @@ Deno.serve(async (req) => {
     console.error("unparseable", text);
   }
   const fields = Object.fromEntries(KEYS.map((k) => [k, parsed[k] == null ? "" : String(parsed[k]).trim()]));
-  return json({ fields });
+  const status = ["ok", "onleesbaar", "ander_label"].includes(String(parsed.status)) ? String(parsed.status) : (match ? "ok" : "onleesbaar");
+  const reden = typeof parsed.reden === "string" ? parsed.reden.slice(0, 120) : "";
+  const twijfel = Array.isArray(parsed.twijfel) ? parsed.twijfel.filter((k) => KEYS.includes(String(k))).map(String) : [];
+  return json({ status, reden, twijfel, fields });
 });
