@@ -12,6 +12,25 @@ async function limited(fn) {
   try { return await fn() } finally { active--; waiting.shift()?.() }
 }
 
+function readError(body) {
+  switch (body?.error) {
+    case 'missing_api_key':
+    case 'bad_api_key':
+      return 'API-sleutel in Supabase ontbreekt of klopt niet'
+    case 'not_a_member':
+      return 'Je account mag geen labels laten uitlezen'
+    case 'model_error':
+      if (body.status === 401 || body.status === 403) return 'API-sleutel wordt geweigerd door Anthropic'
+      if (body.status === 429 || body.status === 529) return 'Claude is even druk, probeer het zo opnieuw'
+      if (body.status === 400) return 'Anthropic weigert het verzoek (tegoed of model controleren)'
+      return 'Claude gaf een fout'
+    case 'model_unreachable':
+      return 'Claude is niet bereikbaar'
+    default:
+      return 'Automatisch lezen mislukt'
+  }
+}
+
 // Eén gescande foto: verkleinen → uploaden + laten uitlezen → controleren → opslaan.
 export default function ScanCard({ scan, userId, onDone, onToast, onReady, onStatus }) {
   const [state, setState] = useState('busy') // busy | ready | error
@@ -50,8 +69,13 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
 
       const image = await blobToBase64(blob)
       const read = limited(() => supabase.functions.invoke('read-label', { body: { image, mediaType: 'image/jpeg' } }))
-        .then(({ data, error }) => {
-          if (error || !data?.fields) throw error || new Error('leeg antwoord')
+        .then(async ({ data, error }) => {
+          if (error) {
+            let body = null
+            try { body = await error.context?.json() } catch { /* geen json */ }
+            throw new Error(readError(body))
+          }
+          if (!data?.fields) throw new Error('Automatisch lezen mislukt')
           const f = emptyLabel()
           for (const k of Object.keys(f)) f[k] = data.fields[k] == null ? '' : String(data.fields[k])
           // Locatie komt van de plank-scan, niet van de sticker; eventuele handmatige wijziging blijft staan.
@@ -59,15 +83,16 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
           setDoubt(new Set(Array.isArray(data.twijfel) ? data.twijfel : []))
           return { fields: f, status: data.status, reden: data.reden || '', twijfel: data.twijfel || [] }
         })
-        .catch(() => null)
+        .catch((e) => ({ failed: e.message || 'Automatisch lezen mislukt' }))
 
       // Pas klaar als foto én uitlezen klaar zijn, zodat opslaan altijd de foto meeneemt.
-      const [, res] = await Promise.all([upload, read])
+      const [, result] = await Promise.all([upload, read])
+      const res = result?.failed ? null : result
       const fields = res?.fields
       const filled = fields && ['project', 'intern_order', 'unit'].some((k) => fields[k])
       let kind, msg
       if (!res) {
-        kind = 'error'; msg = 'Automatisch lezen mislukt. Vul de velden zelf in.'
+        kind = 'error'; msg = `${result?.failed || 'Automatisch lezen mislukt'}. Vul de velden zelf in.`
       } else if (res.status === 'ander_label') {
         kind = 'wrong'; msg = `Verkeerd label: ${res.reden || 'dit is geen TKE/SLS-doossticker'}.`
       } else if (res.status === 'onleesbaar' || !filled) {

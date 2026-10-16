@@ -46,8 +46,13 @@ Deno.serve(async (req) => {
   const { data: member, error: memberErr } = await supa.rpc("is_label_member");
   if (memberErr || member !== true) return json({ error: "not_a_member" }, 403);
 
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = (Deno.env.get("ANTHROPIC_API_KEY") ?? "").trim();
   if (!apiKey) return json({ error: "missing_api_key" }, 500);
+  // Alleen de sleutel zelf, geen spaties of extra tekst (en nooit de sleutel loggen).
+  if (!/^sk-ant-[A-Za-z0-9_-]+$/.test(apiKey)) {
+    console.error("ANTHROPIC_API_KEY heeft een ongeldig formaat (bevat extra tekst?)");
+    return json({ error: "bad_api_key" }, 500);
+  }
 
   let body: { image?: string; mediaType?: string };
   try {
@@ -60,7 +65,9 @@ Deno.serve(async (req) => {
   if (!image || typeof image !== "string" || image.length > 7_000_000) return json({ error: "bad_image" }, 400);
   if (!["image/jpeg", "image/png", "image/webp"].includes(mediaType)) return json({ error: "bad_media_type" }, 400);
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  let res: Response;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
@@ -74,7 +81,11 @@ Deno.serve(async (req) => {
         ],
       }],
     }),
-  });
+    });
+  } catch (e) {
+    console.error("fetch mislukt", e instanceof Error ? e.name : "onbekend");
+    return json({ error: "model_unreachable" }, 502);
+  }
 
   if (!res.ok) {
     console.error("anthropic", res.status, await res.text());
