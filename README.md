@@ -10,7 +10,9 @@ Supabase-project: `yoyuwhhkonkggoscpofq` (voorheen Mobilient).
 1. **API-key**: Supabase → Edge Functions → Secrets → `ANTHROPIC_API_KEY`.
    Optioneel `LABEL_MODEL` (standaard `claude-sonnet-5-5`; `claude-haiku-5-5` is goedkoper).
 2. **Inschrijven uitzetten**: Authentication → Sign In / Providers → "Allow new users to sign up" uit.
-3. **Gebruiker toevoegen**: Authentication → Users → Add user (e-mail + wachtwoord, "Auto confirm"). Daarna in de SQL editor:
+3. **Gebruikers**: beheerders doen dit in de app via **Gebruikers** (toegang geven, rol wisselen, nieuw wachtwoord, toegang intrekken). Handmatig kan ook:
+   
+   **Gebruiker toevoegen**: Authentication → Users → Add user (e-mail + wachtwoord, "Auto confirm"). Daarna in de SQL editor:
    ```sql
    insert into public.label_members (user_id)
    select id from auth.users where email = 'naam@bedrijf.nl';

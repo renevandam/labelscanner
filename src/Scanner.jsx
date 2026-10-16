@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { supabase } from './lib/supabase.js'
 import LabelTable from './LabelTable.jsx'
+import UsersPanel from './UsersPanel.jsx'
+import PasswordPanel from './PasswordPanel.jsx'
 import ScanCard from './ScanCard.jsx'
 import LocationBar from './LocationBar.jsx'
 import CameraSession from './CameraSession.jsx'
@@ -8,6 +10,7 @@ import CameraSession from './CameraSession.jsx'
 export default function Scanner({ session, role }) {
   const isEditor = role === 'editor'
   const [reloadKey, setReloadKey] = useState(0)
+  const [panel, setPanel] = useState(null) // 'users' | 'password'
   const [scans, setScans] = useState([])
   const [toast, setToast] = useState('')
   const toastTimer = useRef()
@@ -81,6 +84,8 @@ export default function Scanner({ session, role }) {
         </div>
         <div className="who">
           <span>{session.user.email}{isEditor ? ' · beheerder' : ''}</span>
+          {isEditor && <button className="link" onClick={() => setPanel('users')}>Gebruikers</button>}
+          <button className="link" onClick={() => setPanel('password')}>Wachtwoord</button>
           <button className="link" onClick={() => supabase.auth.signOut()}>Uitloggen</button>
         </div>
       </header>
@@ -120,6 +125,9 @@ export default function Scanner({ session, role }) {
       {camera && (
         <CameraSession problem={lastProblem} onDismissProblem={() => setLastProblem(null)} location={location} onLocation={setLocation} onCapture={onCapture} onClose={() => { setCamera(false); setLastProblem(null) }} />
       )}
+
+      {panel === 'users' && <UsersPanel me={session.user.id} onClose={() => setPanel(null)} />}
+      {panel === 'password' && <PasswordPanel onClose={() => setPanel(null)} onToast={showToast} />}
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
