@@ -17,7 +17,7 @@ export default function App() {
   return <Member session={session} />
 }
 
-// Haalt de rol op (scanner of beheerder); wie geen lid is krijgt een duidelijke melding.
+// Haalt de rol op (scanner, beheerder of klant); wie geen lid is krijgt een duidelijke melding.
 function Member({ session }) {
   const [role, setRole] = useState(undefined)
   const [name, setName] = useState('')
@@ -27,9 +27,16 @@ function Member({ session }) {
       .select('role, name')
       .eq('user_id', session.user.id)
       .maybeSingle()
-      .then(({ data }) => {
-        setRole(data?.role ?? null)
-        setName(data?.name || '')
+      .then(async ({ data }) => {
+        if (data) {
+          setRole(data.role)
+          setName(data.name || '')
+          return
+        }
+        // Geen medewerker? Kijk of het een klant is (alleen lezen).
+        const { data: c } = await supabase.from('label_customers').select('name').eq('user_id', session.user.id).maybeSingle()
+        setRole(c ? 'customer' : null)
+        setName(c?.name || '')
       })
   }, [session.user.id])
 

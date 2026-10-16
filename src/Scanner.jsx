@@ -9,6 +9,7 @@ import CameraSession from './CameraSession.jsx'
 
 export default function Scanner({ session, role, name }) {
   const isEditor = role === 'editor'
+  const isCustomer = role === 'customer'
   const [reloadKey, setReloadKey] = useState(0)
   const [panel, setPanel] = useState(null) // 'users' | 'password'
   const [scans, setScans] = useState([])
@@ -80,16 +81,22 @@ export default function Scanner({ session, role, name }) {
       <header className="top">
         <div>
           <h1>Labelscanner</h1>
-          <p className="sub">Fotografeer een doossticker, controleer de velden, exporteer naar Excel.</p>
+          <p className="sub">
+            {isCustomer
+              ? 'Overzicht van ontvangen dozen met foto. Download de Excel om notities toe te voegen.'
+              : 'Fotografeer een doossticker, controleer de velden, exporteer naar Excel.'}
+          </p>
         </div>
         <div className="who">
-          <span title={session.user.email}>{name || session.user.email}{isEditor ? ' · beheerder' : ''}</span>
+          <span title={session.user.email}>{name || session.user.email}{isEditor ? ' · beheerder' : isCustomer ? ' · klant' : ''}</span>
           {isEditor && <button className="link" onClick={() => setPanel('users')}>Gebruikers</button>}
           <button className="link" onClick={() => setPanel('password')}>Wachtwoord</button>
           <button className="link" onClick={() => supabase.auth.signOut()}>Uitloggen</button>
         </div>
       </header>
 
+      {!isCustomer && (
+        <>
       <LocationBar location={location} onChange={setLocation} />
 
       <div className="actions">
@@ -120,7 +127,10 @@ export default function Scanner({ session, role, name }) {
         </section>
       )}
 
-      <LabelTable isEditor={isEditor} reloadKey={reloadKey} showToast={showToast} />
+        </>
+      )}
+
+      <LabelTable isEditor={isEditor} isCustomer={isCustomer} reloadKey={reloadKey} showToast={showToast} />
 
       {camera && (
         <CameraSession problem={lastProblem} onDismissProblem={() => setLastProblem(null)} location={location} onLocation={setLocation} onCapture={onCapture} onClose={() => { setCamera(false); setLastProblem(null) }} />

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './lib/supabase.js'
 
-const ROLE_LABEL = { scanner: 'Scanner', editor: 'Beheerder' }
+const ROLE_LABEL = { scanner: 'Scanner', editor: 'Beheerder', customer: 'Klant' }
 
 const ERRORS = {
   not_an_editor: 'Alleen beheerders kunnen gebruikers beheren.',
@@ -95,11 +95,12 @@ export default function UsersPanel({ me, onClose }) {
             <select id="new-role" value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="scanner">Scanner</option>
               <option value="editor">Beheerder</option>
+              <option value="customer">Klant</option>
             </select>
           </label>
           <button className="primary" disabled={busy}>Toegang geven</button>
         </form>
-        <p className="hint">De naam zie je in de lijst bij "Door" en in de Excel. Klik op een naam in de tabel om hem te wijzigen. Scanner: scannen en de lijst bekijken. Beheerder: ook wijzigen, verwijderen en gebruikers beheren.</p>
+        <p className="hint">De naam zie je in de lijst bij "Door" en in de Excel. Klik op een naam in de tabel om hem te wijzigen. Scanner: scannen en de lijst bekijken. Beheerder: ook wijzigen, verwijderen, klantnotities inlezen en gebruikers beheren. Klant: lijst en foto's bekijken en de Excel downloaden, verder niets.</p>
 
         {secret && (
           <div className="secret" role="status">
@@ -159,6 +160,7 @@ export default function UsersPanel({ me, onClose }) {
                         >
                           <option value="scanner">Scanner</option>
                           <option value="editor">Beheerder</option>
+                          <option value="customer">Klant</option>
                         </select>
                       )}
                     </td>

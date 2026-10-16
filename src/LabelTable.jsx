@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, PHOTO_BUCKET } from './lib/supabase.js'
 import { FIELDS, formatNlDate, parseNlDate, parseQty } from './lib/labels.js'
+import ImportNotes from './ImportNotes.jsx'
 
 const PAGE = 100
-const COLS = 'id, locatie, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, created_at, scanned_by, scanned_by_email'
+const COLS = 'id, locatie, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, klant_notitie, created_at, scanned_by, scanned_by_email'
 
 // Kolommen in de tabel: de stickervelden plus wanneer en door wie gescand.
 const COLUMNS = [
   ...FIELDS,
+  { key: 'klant_notitie', label: 'Notitie klant', type: 'text' },
   { key: 'created_at', label: 'Gescand', type: 'stamp', readOnly: true },
   { key: 'scanned_by_email', label: 'Door', type: 'person', readOnly: true },
 ]
@@ -64,8 +66,8 @@ function applyFilters(q, search, filters, people = {}) {
   return q
 }
 
-function display(col, r, people) {
-  if (col.type === 'person') return people[r.scanned_by] || r.scanned_by_email || ''
+function display(col, r, people, hideEmail) {
+  if (col.type === 'person') return people[r.scanned_by] || (hideEmail ? '' : r.scanned_by_email) || ''
   const v = r[col.key]
   if (col.type === 'date') return formatNlDate(v)
   if (col.type === 'stamp') return new Date(v).toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' })
@@ -87,7 +89,8 @@ function parseEdit(col, raw) {
   return { value: v || null }
 }
 
-export default function LabelTable({ isEditor, reloadKey, showToast }) {
+export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast }) {
+  const [importing, setImporting] = useState(false)
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(null)
   const [hasMore, setHasMore] = useState(false)
@@ -243,7 +246,7 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
       }
       if (!all.length) return showToast('Er is niets om te exporteren')
       const { exportLabels } = await import('./lib/excel.js')
-      await exportLabels(all.map((r) => ({ ...r, door: people[r.scanned_by] || r.scanned_by_email || '' })))
+      await exportLabels(all.map((r) => ({ ...r, door: people[r.scanned_by] || (isCustomer ? '' : r.scanned_by_email) || '', scanned_by_email: isCustomer ? null : r.scanned_by_email })))
     } catch (e) {
       showToast('Exporteren mislukt: ' + (e.message || e))
     } finally {
@@ -262,11 +265,22 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
           <button onClick={() => setShowFilters((v) => !v)} aria-pressed={showFilters}>
             {showFilters ? 'Filters verbergen' : 'Zoeken per kolom'}
           </button>
+          {isEditor && <button onClick={() => setImporting(true)}>Klantnotities inlezen</button>}
           <button className="primary" onClick={doExport} disabled={exporting || !total}>
             {exporting ? 'Bezig…' : filtered ? 'Excel (gefilterd)' : 'Excel downloaden'}
           </button>
         </div>
       </div>
+
+      {isCustomer && (
+        <p className="hint">Notities toevoegen? Download de Excel, vul de kolom <b>Notitie klant</b> in en stuur het bestand terug. Laat de kolom ID staan.</p>
+      )}
+      {importing && (
+        <ImportNotes
+          onClose={() => setImporting(false)}
+          onDone={(msg) => { setImporting(false); showToast(msg); load(0) }}
+        />
+      )}
 
       {isEditor && selected.size > 0 && (
         <div className="selbar" role="region" aria-label="Selectie">
@@ -363,7 +377,7 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
                           inputMode={c.type === 'qty' ? 'decimal' : undefined}
                         />
                       ) : (
-                        display(c, r, people)
+                        display(c, r, people, isCustomer)
                       )}
                     </td>
                   )

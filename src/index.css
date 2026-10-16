@@ -179,3 +179,9 @@ table.users .name-input:hover, table.users .name-input:focus { background: var(-
 .topscroll::-webkit-scrollbar, .tablebox::-webkit-scrollbar { height: 10px }
 .topscroll::-webkit-scrollbar-thumb, .tablebox::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px }
 .topscroll::-webkit-scrollbar-track, .tablebox::-webkit-scrollbar-track { background: transparent }
+
+.panel.wide-ish { max-width: 520px }
+.import-summary { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--bg) }
+.import-summary p, .import-summary ul { margin: 0 }
+.import-summary ul { padding-left: 18px; display: grid; gap: 4px }
+.import-summary li.warn { color: var(--warn) }
