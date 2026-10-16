@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase.js'
 import Login from './Login.jsx'
 import Scanner from './Scanner.jsx'
+import { useLang } from './lib/i18n.jsx'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -12,13 +13,19 @@ export default function App() {
     return () => data.subscription.unsubscribe()
   }, [])
 
-  if (session === undefined) return <div className="boot">Laden…</div>
+  if (session === undefined) return <Boot />
   if (!session) return <Login />
   return <Member session={session} />
 }
 
 // Haalt de rol op (scanner, beheerder of klant); wie geen lid is krijgt een duidelijke melding.
+function Boot() {
+  const { t } = useLang()
+  return <div className="boot">{t('common.loading')}</div>
+}
+
 function Member({ session }) {
+  const { t } = useLang()
   const [role, setRole] = useState(undefined)
   const [name, setName] = useState('')
   useEffect(() => {
@@ -40,14 +47,14 @@ function Member({ session }) {
       })
   }, [session.user.id])
 
-  if (role === undefined) return <div className="boot">Laden…</div>
+  if (role === undefined) return <Boot />
   if (role === null)
     return (
       <main className="login">
         <div className="login-card">
-          <h1>Geen toegang</h1>
-          <p className="sub">Je bent ingelogd als {session.user.email}, maar dit account heeft nog geen toegang tot de labelscanner. Vraag de beheerder om je toe te voegen.</p>
-          <button onClick={() => supabase.auth.signOut()}>Uitloggen</button>
+          <h1>{t('access.title')}</h1>
+          <p className="sub">{t('access.body', { email: session.user.email })}</p>
+          <button onClick={() => supabase.auth.signOut()}>{t('common.logout')}</button>
         </div>
       </main>
     )

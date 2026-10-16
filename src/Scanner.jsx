@@ -7,9 +7,14 @@ import OperatorPrompt from './OperatorPrompt.jsx'
 import ScanCard from './ScanCard.jsx'
 import LocationBar from './LocationBar.jsx'
 import CameraSession from './CameraSession.jsx'
+import RecentScans from './RecentScans.jsx'
+import { useLang, LangSwitch } from './lib/i18n.jsx'
 
 export default function Scanner({ session, role, name }) {
+  const { t } = useLang()
   const isEditor = role === 'editor'
+  // Scanners (gedeeld account) krijgen een eenvoudig scherm: locatie, grote startknop, eigen laatste scans.
+  const simple = role === 'scanner'
   const isCustomer = role === 'customer'
   // Scanner-accounts zijn gedeeld: vraag bij het openen wie er scant (geldt tot de app/tab sluit).
   const needsOperator = role === 'scanner'
@@ -43,7 +48,7 @@ export default function Scanner({ session, role, name }) {
   function onFiles(e) {
     const files = [...e.target.files]
     e.target.value = ''
-    if (!location) showToast('Let op: geen locatie ingesteld. Vul hem in bij de doos of scan eerst de plank.')
+    if (!location) showToast(t('loc.missingToast'))
     setScans((s) => [...files.map((file) => ({ id: crypto.randomUUID(), file, location, operator })), ...s])
   }
 
@@ -73,7 +78,7 @@ export default function Scanner({ session, role, name }) {
     const total = savers.current.size
     for (const fn of [...savers.current.values()]) if (await fn()) ok++
     setSavingAll(false)
-    showToast(ok === total ? `${ok} opgeslagen` : `${ok} van ${total} opgeslagen; controleer de overige`)
+    showToast(ok === total ? t('queue.savedAll', { n: ok }) : t('queue.savedSome', { ok, n: total }))
   }
 
   const [camera, setCamera] = useState(false)
@@ -89,25 +94,26 @@ export default function Scanner({ session, role, name }) {
     setScans((s) => [{ id: crypto.randomUUID(), file, location, operator }, ...s])
   }
 
+  const logout = () => { try { sessionStorage.removeItem('labelscanner.operator') } catch { /* */ } supabase.auth.signOut() }
+
   return (
-    <div className="wrap">
+    <div className={`wrap${simple ? ' simple' : ''}`}>
       <header className="top">
         <div>
-          <h1>Labelscanner</h1>
-          <p className="sub">
-            {isCustomer
-              ? 'Overzicht van ontvangen dozen met foto. Download de Excel om notities toe te voegen.'
-              : 'Fotografeer een doossticker, controleer de velden, exporteer naar Excel.'}
-          </p>
+          <h1>{t('app.name')}</h1>
+          <p className="sub">{t(isCustomer ? 'top.subCustomer' : simple ? 'top.subScanner' : 'top.subStaff')}</p>
         </div>
         <div className="who">
           {needsOperator && operator && (
-            <span className="operator">Operator: <b>{operator}</b> <button className="link" onClick={() => setAskOperator(true)}>Wissel</button></span>
+            <span className="operator">{t('top.operator')}: <b>{operator}</b> <button className="link" onClick={() => setAskOperator(true)}>{t('top.switch')}</button></span>
           )}
-          <span title={session.user.email}>{name || session.user.email}{isEditor ? ' · beheerder' : isCustomer ? ' · klant' : ''}</span>
-          {isEditor && <button className="link" onClick={() => setPanel('users')}>Gebruikers</button>}
-          <button className="link" onClick={() => setPanel('password')}>Wachtwoord</button>
-          <button className="link" onClick={() => { try { sessionStorage.removeItem('labelscanner.operator') } catch { /* */ } supabase.auth.signOut() }}>Uitloggen</button>
+          {!simple && (
+            <span title={session.user.email}>{name || session.user.email}{isEditor ? ` · ${t('top.editor')}` : isCustomer ? ` · ${t('top.customer')}` : ''}</span>
+          )}
+          {isEditor && <button className="link" onClick={() => setPanel('users')}>{t('top.users')}</button>}
+          {!simple && <button className="link" onClick={() => setPanel('password')}>{t('top.password')}</button>}
+          <LangSwitch />
+          <button className="link" onClick={logout}>{t('common.logout')}</button>
         </div>
       </header>
 
@@ -115,32 +121,36 @@ export default function Scanner({ session, role, name }) {
         <>
       <LocationBar location={location} onChange={setLocation} />
 
-      <div className="actions">
-        <button className="scan" onClick={() => setCamera(true)}>Doorlopend fotograferen</button>
-        <label className="scan alt">
-          <input type="file" id="cam" accept="image/*" capture="environment" multiple onChange={onFiles} />
-          Losse foto
-        </label>
-        <label className="scan alt">
-          <input type="file" id="gallery" accept="image/*" multiple onChange={onFiles} />
-          Uit galerij kiezen
-        </label>
+      <div className={`actions${simple ? ' big' : ''}`}>
+        <button className="scan" onClick={() => setCamera(true)}>{simple ? t('act.start') : t('act.continuous')}</button>
+        <div className="actions-alt">
+          <label className="scan alt">
+            <input type="file" id="cam" accept="image/*" capture="environment" multiple onChange={onFiles} />
+            {t('act.single')}
+          </label>
+          {!simple && (
+            <label className="scan alt">
+              <input type="file" id="gallery" accept="image/*" multiple onChange={onFiles} />
+              {t('act.gallery')}
+            </label>
+          )}
+        </div>
       </div>
 
       {autoSaved > 0 && (
         <p className="autosaved" role="status">
-          <b>{autoSaved}</b> label{autoSaved === 1 ? '' : 's'} automatisch opgeslagen (alles goed gelezen).
-          {scans.length > 0 ? ' De kaarten hieronder moet je zelf controleren.' : ''}
+          {t('auto.saved', { n: autoSaved })}
+          {scans.length > 0 ? t('auto.check') : ''}
         </p>
       )}
 
       {scans.length > 0 && (
         <section className="queue" aria-live="polite">
           <div className="queue-head">
-            <span>{scans.length} te controleren{readyCount < scans.length ? ` · ${scans.length - readyCount} bezig of handmatig` : ''}</span>
+            <span>{t('queue.count', { n: scans.length })}{readyCount < scans.length ? t('queue.busy', { n: scans.length - readyCount }) : ''}</span>
             {readyCount > 0 && (
               <button className="primary" onClick={saveAll} disabled={savingAll}>
-                {savingAll ? 'Opslaan…' : `Alles opslaan (${readyCount})`}
+                {savingAll ? t('common.saving') : t('queue.saveAll', { n: readyCount })}
               </button>
             )}
           </div>
@@ -153,7 +163,11 @@ export default function Scanner({ session, role, name }) {
         </>
       )}
 
-      <LabelTable isEditor={isEditor} isCustomer={isCustomer} reloadKey={reloadKey} showToast={showToast} />
+      {simple ? (
+        <RecentScans operator={operator} reloadKey={reloadKey} />
+      ) : (
+        <LabelTable isEditor={isEditor} isCustomer={isCustomer} reloadKey={reloadKey} showToast={showToast} />
+      )}
 
       {camera && (
         <CameraSession saved={autoSaved} pending={scans.length} problem={lastProblem} onDismissProblem={() => setLastProblem(null)} location={location} onLocation={setLocation} onCapture={onCapture} onClose={() => { setCamera(false); setLastProblem(null) }} />
@@ -165,7 +179,7 @@ export default function Scanner({ session, role, name }) {
           account={name || session.user.email}
           onSet={(v) => { setOperator(v); setAskOperator(false) }}
           onCancel={operator ? () => setAskOperator(false) : null}
-          onLogout={() => { try { sessionStorage.removeItem('labelscanner.operator') } catch { /* */ } supabase.auth.signOut() }}
+          onLogout={logout}
         />
       )}
 

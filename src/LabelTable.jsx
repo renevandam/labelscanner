@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, PHOTO_BUCKET } from './lib/supabase.js'
 import { FIELDS, formatNlDate, parseNlDate, parseQty } from './lib/labels.js'
 import ImportNotes from './ImportNotes.jsx'
+import { useLang } from './lib/i18n.jsx'
 
 const PAGE = 100
 const COLS = 'id, locatie, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, klant_notitie, actief, operator, created_at, scanned_by, scanned_by_email'
@@ -76,30 +77,31 @@ function who(r, people, hideEmail) {
   return r.operator || people[r.scanned_by] || (hideEmail ? '' : r.scanned_by_email) || ''
 }
 
-function display(col, r, people, hideEmail) {
+function display(col, r, people, hideEmail, locale) {
   if (col.type === 'person') return who(r, people, hideEmail)
   const v = r[col.key]
   if (col.type === 'date') return formatNlDate(v)
-  if (col.type === 'stamp') return new Date(v).toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' })
+  if (col.type === 'stamp') return new Date(v).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' })
   return v ?? ''
 }
 
 // Zet de getypte waarde om naar wat de database verwacht; { value } of { error }.
-function parseEdit(col, raw) {
+function parseEdit(col, raw, t) {
   const v = raw.trim()
   if (col.type === 'date') {
     if (!v) return { value: null }
     const iso = parseNlDate(v)
-    return iso ? { value: iso } : { error: 'Gebruik dag-maand-jaar, bv. 11-4-2024' }
+    return iso ? { value: iso } : { error: t('list.dateHelp') }
   }
   if (col.type === 'qty') {
     const n = parseQty(v)
-    return Number.isNaN(n) ? { error: `${col.label} moet een getal zijn` } : { value: n }
+    return Number.isNaN(n) ? { error: t('err.qty', { f: t(`field.${col.key}`) }) } : { value: n }
   }
   return { value: v || null }
 }
 
 export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast }) {
+  const { t, lang, locale } = useLang()
   const [importing, setImporting] = useState(false)
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(null)
@@ -162,7 +164,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
     q = applyFilters(q, search, filters, peopleRef.current).order('created_at', { ascending: false }).range(offset, offset + PAGE - 1)
     const { data, error, count } = await q
     setLoading(false)
-    if (error) return showToast('Lijst laden mislukt: ' + error.message)
+    if (error) return showToast(t('list.loadFailed', { msg: error.message }))
     setRows((prev) => (offset === 0 ? data : [...prev, ...data]))
     if (offset === 0) {
       setTotal(count)
@@ -209,12 +211,12 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
     const { error } = await supabase.from('labels').delete().in('id', ids)
     setDeleting(false)
     setConfirming(false)
-    if (error) return showToast('Verwijderen mislukt: ' + error.message)
+    if (error) return showToast(t('list.deleteFailed', { msg: error.message }))
     if (photos.length) await supabase.storage.from(PHOTO_BUCKET).remove(photos)
     setRows((r) => r.filter((x) => !selected.has(x.id)))
     setTotal((t) => (t == null ? t : Math.max(0, t - ids.length)))
     setSelected(new Set())
-    showToast(`${ids.length} regel${ids.length === 1 ? '' : 's'} verwijderd`)
+    showToast(t('list.deleted', { n: ids.length }))
   }
 
   async function setActive(ids, active) {
@@ -222,11 +224,11 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
     setSettingActive(true)
     const { error } = await supabase.rpc('label_set_active', { p_ids: ids, p_active: active })
     setSettingActive(false)
-    if (error) return showToast('Wijzigen mislukt: ' + error.message)
+    if (error) return showToast(t('list.changeFailed', { msg: error.message }))
     const set = new Set(ids)
     setRows((rs) => rs.map((r) => (set.has(r.id) ? { ...r, actief: active } : r)))
     if (ids.length > 1) {
-      showToast(`${ids.length} regels op ${active ? 'actief' : 'inactief'} gezet`)
+      showToast(t(active ? 'list.activeSet' : 'list.inactiveSet', { n: ids.length }))
       setSelected(new Set())
     }
   }
@@ -243,18 +245,18 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
     setEditing(null)
     if (e.value.trim() === e.original.trim()) return
     const col = COLUMNS.find((c) => c.key === e.key)
-    const { value, error } = parseEdit(col, e.value)
+    const { value, error } = parseEdit(col, e.value, t)
     if (error) return showToast(error)
     const { data, error: dbErr } = await supabase.from('labels').update({ [e.key]: value }).eq('id', e.id).select(COLS).single()
-    if (dbErr) return showToast('Wijzigen mislukt: ' + dbErr.message)
+    if (dbErr) return showToast(t('list.changeFailed', { msg: dbErr.message }))
     setRows((rs) => rs.map((r) => (r.id === e.id ? data : r)))
-    showToast(`${col.label} gewijzigd`)
+    showToast(t('list.changed', { f: t(`field.${col.key}`) }))
   }
 
   async function openPhoto(path) {
     const w = window.open('', '_blank')
     const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, 300)
-    if (error || !data) { w?.close(); return showToast('Foto niet gevonden') }
+    if (error || !data) { w?.close(); return showToast(t('list.noPhoto')) }
     if (w) w.location = data.signedUrl
     else window.location.href = data.signedUrl
   }
@@ -271,11 +273,11 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
         all.push(...data)
         if (data.length < 1000) break
       }
-      if (!all.length) return showToast('Er is niets om te exporteren')
+      if (!all.length) return showToast(t('list.nothingToExport'))
       const { exportLabels } = await import('./lib/excel.js')
-      await exportLabels(all.map((r) => ({ ...r, door: who(r, people, isCustomer), scanned_by_email: isCustomer ? null : r.scanned_by_email })))
+      await exportLabels(all.map((r) => ({ ...r, door: who(r, people, isCustomer), scanned_by_email: isCustomer ? null : r.scanned_by_email })), lang)
     } catch (e) {
-      showToast('Exporteren mislukt: ' + (e.message || e))
+      showToast(t('list.exportFailed', { msg: e.message || e }))
     } finally {
       setExporting(false)
     }
@@ -286,21 +288,21 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
   return (
     <section className="list">
       <div className="listhead">
-        <h2>Gescande labels {total != null && <span className="count">{total}</span>}</h2>
+        <h2>{t('list.title')} {total != null && <span className="count">{total}</span>}</h2>
         <div className="list-tools">
-          <input id="search" type="search" placeholder="Zoek unit, project, order of locatie" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input id="search" type="search" placeholder={t('list.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <button onClick={() => setShowFilters((v) => !v)} aria-pressed={showFilters}>
-            {showFilters ? 'Filters verbergen' : 'Zoeken per kolom'}
+            {showFilters ? t('list.hideFilters') : t('list.filters')}
           </button>
-          {isEditor && <button onClick={() => setImporting(true)}>Klantnotities inlezen</button>}
+          {isEditor && <button onClick={() => setImporting(true)}>{t('list.import')}</button>}
           <button className="primary" onClick={doExport} disabled={exporting || !total}>
-            {exporting ? 'Bezig…' : filtered ? 'Excel (gefilterd)' : 'Excel downloaden'}
+            {exporting ? t('list.busy') : filtered ? t('list.excelFiltered') : t('list.excel')}
           </button>
         </div>
       </div>
 
       {isCustomer && (
-        <p className="hint">Notities toevoegen? Download de Excel, vul de kolom <b>Notitie klant</b> in en stuur het bestand terug. Laat de kolom ID staan.</p>
+        <p className="hint">{t('list.customerHint')}</p>
       )}
       {importing && (
         <ImportNotes
@@ -311,31 +313,31 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
 
       {canToggle && selected.size > 0 && (
         <div className="selbar" role="region" aria-label="Selectie">
-          <span>{selected.size} geselecteerd</span>
+          <span>{t('list.selected', { n: selected.size })}</span>
           {!confirming && (
             <>
-              <button onClick={() => setActive([...selected], true)} disabled={settingActive}>Actief</button>
-              <button onClick={() => setActive([...selected], false)} disabled={settingActive}>Inactief</button>
+              <button onClick={() => setActive([...selected], true)} disabled={settingActive}>{t('list.setActive')}</button>
+              <button onClick={() => setActive([...selected], false)} disabled={settingActive}>{t('list.setInactive')}</button>
             </>
           )}
           {!isEditor ? (
-            <button onClick={() => setSelected(new Set())}>Selectie wissen</button>
+            <button onClick={() => setSelected(new Set())}>{t('list.clearSel')}</button>
           ) : confirming ? (
             <>
-              <span className="selbar-q">Definitief verwijderen, inclusief foto's?</span>
-              <button className="danger-fill" onClick={deleteSelected} disabled={deleting}>{deleting ? 'Verwijderen…' : 'Ja, verwijder'}</button>
-              <button onClick={() => setConfirming(false)} disabled={deleting}>Annuleren</button>
+              <span className="selbar-q">{t('list.confirmDelete')}</span>
+              <button className="danger-fill" onClick={deleteSelected} disabled={deleting}>{deleting ? t('list.deleting') : t('list.yesDelete')}</button>
+              <button onClick={() => setConfirming(false)} disabled={deleting}>{t('common.cancel')}</button>
             </>
           ) : (
             <>
-              <button className="danger-fill" onClick={() => setConfirming(true)}>Verwijderen</button>
-              <button onClick={() => setSelected(new Set())}>Selectie wissen</button>
+              <button className="danger-fill" onClick={() => setConfirming(true)}>{t('list.delete')}</button>
+              <button onClick={() => setSelected(new Set())}>{t('list.clearSel')}</button>
             </>
           )}
         </div>
       )}
 
-      {isEditor && <p className="hint">Klik op een cel om hem te wijzigen. Enter slaat op, Esc annuleert.</p>}
+      {isEditor && <p className="hint">{t('list.editHint')}</p>}
 
       <div className="topscroll" ref={topRef} hidden={!overflow} aria-hidden="true" onScroll={(e) => syncFrom(e.currentTarget, boxRef.current)}>
         <div style={{ width: scrollW, height: 1 }} />
@@ -346,10 +348,10 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
             <tr>
               {canToggle && (
                 <th className="chk">
-                  <input type="checkbox" id="select-all" aria-label="Alles selecteren" checked={allChecked} onChange={toggleAll} />
+                  <input type="checkbox" id="select-all" aria-label={t('list.selectAll')} checked={allChecked} onChange={toggleAll} />
                 </th>
               )}
-              {COLUMNS.map((c) => <th key={c.key}>{c.label}</th>)}
+              {COLUMNS.map((c) => <th key={c.key}>{t(`field.${c.key}`)}</th>)}
               <th></th>
             </tr>
             {showFilters && (
@@ -358,18 +360,18 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
                 {COLUMNS.map((c) => (
                   <th key={c.key}>
                     {c.type === 'bool' ? (
-                      <select id={`filter-${c.key}`} aria-label={`Filter ${c.label}`} value={filters[c.key] || ''} onChange={(e) => setFilter(c.key, e.target.value)}>
-                        <option value="">alle</option>
-                        <option value="ja">ja</option>
-                        <option value="nee">nee</option>
+                      <select id={`filter-${c.key}`} aria-label={`Filter ${t(`field.${c.key}`)}`} value={filters[c.key] || ''} onChange={(e) => setFilter(c.key, e.target.value)}>
+                        <option value="">{t('list.all')}</option>
+                        <option value="ja">{t('common.yes').toLowerCase()}</option>
+                        <option value="nee">{t('common.no').toLowerCase()}</option>
                       </select>
                     ) : (
                     <input
                       id={`filter-${c.key}`}
-                      aria-label={`Filter ${c.label}`}
+                      aria-label={`Filter ${t(`field.${c.key}`)}`}
                       value={filters[c.key] || ''}
                       onChange={(e) => setFilter(c.key, e.target.value)}
-                      placeholder={c.type === 'date' || c.type === 'stamp' ? 'd-m-jjjj' : c.type === 'qty' ? '=' : 'bevat…'}
+                      placeholder={c.type === 'date' || c.type === 'stamp' ? t('field.datePlaceholder') : c.type === 'qty' ? '=' : t('list.contains')}
                       inputMode={c.type === 'qty' ? 'decimal' : undefined}
                     />
                     )}
@@ -377,7 +379,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
                 ))}
                 <th>
                   {Object.values(filters).some(Boolean) && (
-                    <button className="link" onClick={() => setFilters({})}>Wis</button>
+                    <button className="link" onClick={() => setFilters({})}>{t('list.clear')}</button>
                   )}
                 </th>
               </tr>
@@ -387,7 +389,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
             {rows.length === 0 && (
               <tr>
                 <td colSpan={colCount} className="empty">
-                  {loading ? 'Laden…' : filtered ? 'Geen labels gevonden met deze zoekcriteria.' : 'Nog geen labels. Maak een foto van een sticker om de eerste regel toe te voegen.'}
+                  {loading ? t('common.loading') : filtered ? t('list.emptyFiltered') : t('list.empty')}
                 </td>
               </tr>
             )}
@@ -395,7 +397,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
               <tr key={r.id} className={[selected.has(r.id) && 'sel', r.actief === false && 'inactive'].filter(Boolean).join(' ') || undefined}>
                 {canToggle && (
                   <td className="chk">
-                    <input type="checkbox" id={`sel-${r.id}`} aria-label="Selecteer regel" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
+                    <input type="checkbox" id={`sel-${r.id}`} aria-label={t('list.selectRow')} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                   </td>
                 )}
                 {COLUMNS.map((c) => {
@@ -425,21 +427,21 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
                             className={`toggle ${r.actief ? 'on' : 'off'}`}
                             role="switch"
                             aria-checked={!!r.actief}
-                            aria-label={`Actief: ${r.actief ? 'ja' : 'nee'}`}
+                            aria-label={`${t('field.actief')}: ${r.actief ? t('common.yes') : t('common.no')}`}
                             disabled={settingActive}
                             onClick={(e) => { e.stopPropagation(); setActive([r.id], !r.actief) }}
                           >
-                            {r.actief ? 'Ja' : 'Nee'}
+                            {r.actief ? t('common.yes') : t('common.no')}
                           </button>
-                        ) : (r.actief ? 'Ja' : 'Nee')
+                        ) : (r.actief ? t('common.yes') : t('common.no'))
                       ) : (
-                        display(c, r, people, isCustomer)
+                        display(c, r, people, isCustomer, locale)
                       )}
                     </td>
                   )
                 })}
                 <td className="row-btns">
-                  {r.photo_path && <button onClick={() => openPhoto(r.photo_path)}>Foto</button>}
+                  {r.photo_path && <button onClick={() => openPhoto(r.photo_path)}>{t('list.photo')}</button>}
                 </td>
               </tr>
             ))}
@@ -448,7 +450,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
       </div>
       {hasMore && (
         <button className="more" onClick={() => load(rows.length)} disabled={loading}>
-          {loading ? 'Laden…' : 'Meer laden'}
+          {loading ? t('common.loading') : t('list.more')}
         </button>
       )}
     </section>

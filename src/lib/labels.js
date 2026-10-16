@@ -42,7 +42,8 @@ export function parseQty(s) {
 }
 
 // Zet formulierwaarden om naar een databaserij; geeft { row } of { error }.
-export function toRow(form) {
+// t: vertaalfunctie (useLang().t) voor de foutmelding.
+export function toRow(form, t = (k) => k) {
   const row = {}
   for (const f of FIELDS) {
     const v = String(form[f.key] ?? '').trim()
@@ -50,19 +51,19 @@ export function toRow(form) {
       if (v === '') row[f.key] = null
       else {
         const iso = parseNlDate(v)
-        if (!iso) return { error: `Datum "${v}" is niet geldig. Gebruik dag-maand-jaar, bv. 11-4-2024.` }
+        if (!iso) return { error: t('err.date', { v }) }
         row[f.key] = iso
       }
     } else if (f.type === 'qty') {
       const n = parseQty(v)
-      if (Number.isNaN(n)) return { error: `${f.label} moet een getal zijn.` }
+      if (Number.isNaN(n)) return { error: t('err.qty', { f: t(`field.${f.key}`) }) }
       row[f.key] = n
     } else {
       row[f.key] = v === '' ? null : v
     }
   }
   if (!row.unit && !row.project && !row.intern_order) {
-    return { error: 'Vul minstens Unit#, Project# of Intern order# in.' }
+    return { error: t('err.keyField') }
   }
   return { row }
 }

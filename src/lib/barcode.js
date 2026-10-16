@@ -48,8 +48,7 @@ export async function openCamera(width = 1920, height = 1080) {
   })
 }
 
+// Geeft een vertaalsleutel terug (zie i18n.jsx).
 export function cameraError(e) {
-  return e?.name === 'NotAllowedError'
-    ? 'Geen toegang tot de camera. Sta camera-toegang toe voor deze site in je browserinstellingen.'
-    : 'Camera starten mislukt.'
+  return e?.name === 'NotAllowedError' ? 'cam.denied' : 'cam.failed'
 }

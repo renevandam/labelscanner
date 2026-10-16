@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { openCamera, watchForBarcode, cameraError } from './lib/barcode.js'
+import { useLang } from './lib/i18n.jsx'
 
 // Doorlopende camera: elke tik op de knop is een foto, de camera blijft open.
 // "Andere plank" schakelt hetzelfde beeld tijdelijk naar barcode-scannen.
 export default function CameraSession({ location, onLocation, onCapture, onClose, problem, onDismissProblem, saved = 0, pending = 0 }) {
+  const { t } = useLang()
   const video = useRef(null)
   const [error, setError] = useState('')
   const [ready, setReady] = useState(false)
@@ -57,14 +59,14 @@ export default function CameraSession({ location, onLocation, onCapture, onClose
   }
 
   return (
-    <div className="session" role="dialog" aria-modal="true" aria-label="Labels fotograferen">
+    <div className="session" role="dialog" aria-modal="true" aria-label={t('cam.title')}>
       <div className="session-top">
         <div>
-          <div className="loc-label">Locatie</div>
-          <div className="session-loc">{location || 'niet ingesteld'}</div>
+          <div className="loc-label">{t('loc.label')}</div>
+          <div className="session-loc">{location || t('loc.notSet')}</div>
         </div>
         <button onClick={() => setMode(mode === 'barcode' ? 'photo' : 'barcode')}>
-          {mode === 'barcode' ? 'Annuleer plank' : 'Andere plank'}
+          {mode === 'barcode' ? t('cam.cancelShelf') : t('cam.otherShelf')}
         </button>
       </div>
 
@@ -79,22 +81,22 @@ export default function CameraSession({ location, onLocation, onCapture, onClose
           </div>
         )}
         <p className="session-hint">
-          {error || (!ready ? 'Camera starten…' : mode === 'barcode' ? 'Richt op de barcode van de plank' : 'Zet de hele sticker in beeld en tik op de knop')}
+          {error ? t(error) : !ready ? t('cam.starting') : mode === 'barcode' ? t('cam.aimShelf') : t('cam.aimLabel')}
         </p>
       </div>
 
       <div className="session-bottom">
         <div className="session-count">
-          <b>{count}</b> foto{count === 1 ? '' : "'s"}
-          <small>{saved} opgeslagen{pending ? ` · ${pending} te controleren` : ''}</small>
+          <b>{count}</b> {t('cam.photos', { n: count }).replace(/^\d+\s*/, '')}
+          <small>{t('cam.savedPending', { s: saved })}{pending ? t('cam.pending', { n: pending }) : ''}</small>
         </div>
         <button
           className="shutter"
           onClick={shoot}
           disabled={!ready || mode !== 'photo'}
-          aria-label="Foto maken"
+          aria-label={t('cam.shoot')}
         />
-        <button className="done" onClick={onClose}>Klaar</button>
+        <button className="done" onClick={onClose}>{t('common.done')}</button>
       </div>
     </div>
   )

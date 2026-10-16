@@ -24,7 +24,7 @@ Beoordeel eerst de foto:
 Antwoord met ALLEEN een JSON-object, zonder uitleg eromheen:
 {"status":"ok","reden":"","twijfel":[],"project":"","intern_order":"","unit":"","datum":"","coordinator":"","doos":"","lengte":"","pallet":"","rol":"","kabel":"","notitie":""}
 
-- reden: bij "ander_label" of "onleesbaar" een korte Nederlandse uitleg voor de medewerker (max 8 woorden, bv "foto is onscherp", "onderkant label valt buiten beeld", "dit is een DHL-verzendlabel"). Anders "".
+- reden: bij "ander_label" of "onleesbaar" een korte uitleg voor de medewerker in het {{REDEN_TAAL}} (max 8 woorden, bv "foto is onscherp", "onderkant label valt buiten beeld", "dit is een DHL-verzendlabel"). Anders "".
 - twijfel: lijst met de sleutels van velden die je wel hebt ingevuld maar waarvan je niet zeker bent (bv ["doos","datum"]).
 - project: waarde bij "Project#", spaties behouden zoals gedrukt (bv "2022 821601")
 - intern_order: waarde bij "Intern order#"
@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     return json({ error: "bad_api_key" }, 500);
   }
 
-  let body: { image?: string; mediaType?: string };
+  let body: { image?: string; mediaType?: string; lang?: string };
   try {
     body = await req.json();
   } catch {
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
         role: "user",
         content: [
           { type: "image", source: { type: "base64", media_type: mediaType, data: image } },
-          { type: "text", text: PROMPT },
+          { type: "text", text: PROMPT.replace("{{REDEN_TAAL}}", body.lang === "en" ? "Engels (English)" : "Nederlands") },
         ],
       }],
     }),

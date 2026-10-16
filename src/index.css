@@ -201,3 +201,27 @@ tr.filters select { font: 400 .8rem var(--f-body); padding: 4px 6px; min-height:
 
 .autosaved { margin: 0; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ok) 12%, var(--surface)); border: 1px solid var(--ok) }
 .session-count small { display: block; font-size: .75rem; color: #ccc }
+
+/* Taalkeuze */
+.langswitch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden }
+.langswitch button { min-height: 30px; padding: 3px 10px; border: 0; border-radius: 0; background: transparent; font-size: .78rem; font-weight: 700; color: var(--muted) }
+.langswitch button.on { background: var(--ink); color: var(--bg) }
+.login-head { display: flex; justify-content: space-between; align-items: center; gap: 10px }
+
+/* Acties: grote startknop met kleine alternatieven */
+.actions { flex-direction: column; align-items: stretch }
+.actions-alt { display: flex; gap: 10px; flex-wrap: wrap }
+.actions-alt .scan { flex: 1 1 160px }
+.actions.big > .scan { min-height: 120px; font-size: 1.6rem; border-radius: 14px; letter-spacing: .01em }
+.simple .locbar { padding: 16px }
+.simple .loc-value { font-size: 2rem }
+.simple .top .sub { max-width: 46ch }
+
+/* Laatste scans (scanner) */
+.recent { display: grid; gap: 8px }
+.recent ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface) }
+.recent li { display: grid; grid-template-columns: 52px 1fr auto auto; gap: 10px; align-items: baseline; padding: 10px 12px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+.recent li:last-child { border-bottom: 0 }
+.recent .r-time { color: var(--muted); font-size: .85rem }
+.recent .r-unit { font-weight: 600; min-width: 0; overflow-wrap: anywhere }
+.recent .r-loc, .recent .r-qty { color: var(--muted); font-size: .85rem }

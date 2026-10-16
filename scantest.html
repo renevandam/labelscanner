@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="r"></div><script type="module">
+import React from 'react'; import { createRoot } from 'react-dom/client'; import '/src/index.css';
+import { LangProvider } from '/src/lib/i18n.jsx'; import Scanner from '/src/Scanner.jsx'; import Login from '/src/Login.jsx';
+sessionStorage.setItem('labelscanner.operator','Gert'); localStorage.setItem('labelscanner.locatie','A-03-2');
+localStorage.setItem('labelscanner.lang', location.hash.includes('en') ? 'en' : 'nl');
+const view = location.hash.includes('login') ? React.createElement(Login) : React.createElement(Scanner,{session:{user:{id:'u1',email:'scanner@bedrijf.nl'}},role:'scanner',name:'Scanner 1'});
+createRoot(document.getElementById('r')).render(React.createElement(LangProvider,null,view));
+</script></body></html>

@@ -1,28 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './lib/supabase.js'
+import { useLang } from './lib/i18n.jsx'
 
-const ROLE_LABEL = { scanner: 'Scanner', editor: 'Beheerder', customer: 'Klant' }
+const KNOWN_ERRORS = ['not_an_editor', 'bad_email', 'not_yourself', 'create_failed', 'reset_failed']
 
-const ERRORS = {
-  not_an_editor: 'Alleen beheerders kunnen gebruikers beheren.',
-  bad_email: 'Dit e-mailadres klopt niet.',
-  not_yourself: 'Je kunt je eigen rol of toegang niet wijzigen.',
-  create_failed: 'Account aanmaken lukte niet.',
-  reset_failed: 'Nieuw wachtwoord instellen lukte niet.',
-}
-
-async function call(body) {
+async function call(body, t) {
   const { data, error } = await supabase.functions.invoke('manage-members', { body })
   if (error) {
     let info = null
     try { info = await error.context?.json() } catch { /* geen json */ }
-    throw new Error(ERRORS[info?.error] || info?.message || 'Er ging iets mis. Probeer het opnieuw.')
+    throw new Error(KNOWN_ERRORS.includes(info?.error) ? t(`users.err.${info.error}`) : info?.message || t('common.wrong'))
   }
   return data
 }
 
 // Beheerders geven hier mensen toegang, wisselen rollen en zetten een nieuw wachtwoord.
 export default function UsersPanel({ me, onClose }) {
+  const { t, locale } = useLang()
   const [members, setMembers] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -37,7 +31,7 @@ export default function UsersPanel({ me, onClose }) {
     setBusy(true)
     setError('')
     try {
-      const data = await call(body)
+      const data = await call(body, t)
       if (data.members) setMembers(data.members)
       return data
     } catch (e) {
@@ -46,9 +40,9 @@ export default function UsersPanel({ me, onClose }) {
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [t])
 
-  useEffect(() => { run({ action: 'list' }) }, [run])
+  useEffect(() => { run({ action: 'list' }) }, []) // eslint-disable-line react-hooks/exhaustive-deps -- één keer laden
 
   async function add(e) {
     e.preventDefault()
@@ -77,43 +71,43 @@ export default function UsersPanel({ me, onClose }) {
     <div className="panel-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <section className="panel" role="dialog" aria-modal="true" aria-labelledby="users-title">
         <div className="panel-head">
-          <h2 id="users-title">Gebruikers</h2>
-          <button onClick={onClose}>Sluiten</button>
+          <h2 id="users-title">{t('users.title')}</h2>
+          <button onClick={onClose}>{t('common.close')}</button>
         </div>
 
         <form className="add-user" onSubmit={add}>
           <label className="name-field">
-            Naam
-            <input id="new-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="bv. Gert" maxLength={60} autoComplete="off" />
+            {t('users.name')}
+            <input id="new-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('users.namePh')} maxLength={60} autoComplete="off" />
           </label>
           <label>
-            E-mailadres
-            <input id="new-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="naam@bedrijf.nl" autoComplete="off" />
+            {t('users.email')}
+            <input id="new-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('users.emailPh')} autoComplete="off" />
           </label>
           <label>
-            Rol
+            {t('users.role')}
             <select id="new-role" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="scanner">Scanner</option>
-              <option value="editor">Beheerder</option>
-              <option value="customer">Klant</option>
+              <option value="scanner">{t('role.scanner')}</option>
+              <option value="editor">{t('role.editor')}</option>
+              <option value="customer">{t('role.customer')}</option>
             </select>
           </label>
-          <button className="primary" disabled={busy}>Toegang geven</button>
+          <button className="primary" disabled={busy}>{t('users.add')}</button>
         </form>
-        <p className="hint">De naam zie je in de lijst bij "Door" en in de Excel. Klik op een naam in de tabel om hem te wijzigen. Scanner: scannen en de lijst bekijken. Beheerder: ook wijzigen, verwijderen, klantnotities inlezen en gebruikers beheren. Klant: lijst en foto's bekijken en de Excel downloaden, verder niets.</p>
+        <p className="hint">{t('users.help')}</p>
 
         {secret && (
           <div className="secret" role="status">
             <p>
-              {secret.isNew ? 'Account aangemaakt.' : 'Nieuw wachtwoord ingesteld.'} Geef deze gegevens door; het wachtwoord is maar één keer zichtbaar.
+              {secret.isNew ? t('users.created') : t('users.reset')} {t('users.passOnce')}
             </p>
             <div className="secret-box">
               <span>{secret.email}</span>
               <b>{secret.password}</b>
             </div>
             <div className="row-actions">
-              <button onClick={copy}>{copied ? 'Gekopieerd' : 'Kopieer'}</button>
-              <button onClick={() => setSecret(null)}>Klaar</button>
+              <button onClick={copy}>{copied ? t('common.copied') : t('common.copy')}</button>
+              <button onClick={() => setSecret(null)}>{t('common.done')}</button>
             </div>
           </div>
         )}
@@ -123,10 +117,10 @@ export default function UsersPanel({ me, onClose }) {
         <div className="tablebox">
           <table className="users">
             <thead>
-              <tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Laatst ingelogd</th><th></th></tr>
+              <tr><th>{t('users.name')}</th><th>{t('users.colEmail')}</th><th>{t('users.role')}</th><th>{t('users.lastLogin')}</th><th></th></tr>
             </thead>
             <tbody>
-              {members === null && <tr><td colSpan={5} className="empty">Laden…</td></tr>}
+              {members === null && <tr><td colSpan={5} className="empty">{t('common.loading')}</td></tr>}
               {members?.map((m) => {
                 const self = m.user_id === me
                 return (
@@ -136,9 +130,9 @@ export default function UsersPanel({ me, onClose }) {
                         key={m.name || ''}
                         id={`name-${m.user_id}`}
                         className="name-input"
-                        aria-label={`Naam van ${m.email}`}
+                        aria-label={t('users.nameOf', { email: m.email })}
                         defaultValue={m.name || ''}
-                        placeholder="naam invullen"
+                        placeholder={t('users.fillName')}
                         maxLength={60}
                         disabled={busy}
                         onBlur={(e) => {
@@ -148,32 +142,32 @@ export default function UsersPanel({ me, onClose }) {
                         onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                       />
                     </td>
-                    <td>{m.email}{self && <span className="you"> (jij)</span>}</td>
+                    <td>{m.email}{self && <span className="you"> {t('users.you')}</span>}</td>
                     <td>
-                      {self ? ROLE_LABEL[m.role] : (
+                      {self ? t(`role.${m.role}`) : (
                         <select
                           id={`role-${m.user_id}`}
-                          aria-label={`Rol van ${m.email}`}
+                          aria-label={t('users.roleOf', { email: m.email })}
                           value={m.role}
                           disabled={busy}
                           onChange={(e) => run({ action: 'set_role', user_id: m.user_id, role: e.target.value })}
                         >
-                          <option value="scanner">Scanner</option>
-                          <option value="editor">Beheerder</option>
-                          <option value="customer">Klant</option>
+                          <option value="scanner">{t('role.scanner')}</option>
+                          <option value="editor">{t('role.editor')}</option>
+                          <option value="customer">{t('role.customer')}</option>
                         </select>
                       )}
                     </td>
-                    <td>{m.last_sign_in_at ? new Date(m.last_sign_in_at).toLocaleDateString('nl-NL') : 'nog niet'}</td>
+                    <td>{m.last_sign_in_at ? new Date(m.last_sign_in_at).toLocaleDateString(locale) : t('users.never')}</td>
                     <td className="row-btns">
-                      <button disabled={busy} onClick={() => resetPassword(m)}>Nieuw wachtwoord</button>
+                      <button disabled={busy} onClick={() => resetPassword(m)}>{t('users.newPassword')}</button>
                       {!self && (confirmRemove === m.user_id ? (
                         <>
-                          <button className="danger-fill" disabled={busy} onClick={() => { setConfirmRemove(null); run({ action: 'remove', user_id: m.user_id }) }}>Ja, toegang weg</button>
-                          <button onClick={() => setConfirmRemove(null)}>Nee</button>
+                          <button className="danger-fill" disabled={busy} onClick={() => { setConfirmRemove(null); run({ action: 'remove', user_id: m.user_id }) }}>{t('users.confirmRevoke')}</button>
+                          <button onClick={() => setConfirmRemove(null)}>{t('common.no')}</button>
                         </>
                       ) : (
-                        <button className="danger" disabled={busy} onClick={() => setConfirmRemove(m.user_id)}>Toegang intrekken</button>
+                        <button className="danger" disabled={busy} onClick={() => setConfirmRemove(m.user_id)}>{t('users.revoke')}</button>
                       ))}
                     </td>
                   </tr>
