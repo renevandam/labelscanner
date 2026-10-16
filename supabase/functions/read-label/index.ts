@@ -32,7 +32,8 @@ Antwoord met ALLEEN een JSON-object, zonder uitleg eromheen:
 - datum: waarde bij "Datum" als dag-maand-jaar (bv "11-4-2024")
 - coordinator: waarde bij "Coordinator"
 - doos/lengte/pallet/rol/kabel: het (meestal handgeschreven) getal op de lijn vóór dat woord onder "Verpakking"; alleen cijfers, "" als de lijn leeg is
-- notitie: overige handgeschreven tekst op het label (bv paraaf + datum onderaan)
+- notitie: alles wat iemand met de hand op het label heeft veranderd of toegevoegd, kort en zakelijk, gescheiden door "; ". Denk aan: doorgestreepte voorgedrukte woorden en wat ervoor in de plaats is geschreven (bv "DOOS doorgestreept, COLLI ingevuld"), een doorgestreepte of overschreven waarde (bv "Datum gecorrigeerd van 11-4 naar 12-4"), extra handgeschreven woorden of getallen, en een paraaf met datum (bv "paraaf GL 2-5-2024"). Leeg als er niets met de hand is veranderd of toegevoegd behalve de aantallen bij Verpakking.
+- Staat er een getal op de lijn van een doorgestreept woord (bv DOOS doorgestreept en COLLI erbij geschreven), zet dat getal toch in het veld van die lijn en vermeld de wijziging in notitie.
 Alle veldwaarden zijn strings. Verzin niets: wat je niet kunt lezen laat je "". Bij "ander_label" laat je alle velden "".`;
 
 Deno.serve(async (req) => {

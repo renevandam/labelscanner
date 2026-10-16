@@ -41,21 +41,23 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
   const [dupe, setDupe] = useState(null)
   const [doubt, setDoubt] = useState(() => new Set())
   const photoPath = useRef(null)
-  const started = useRef(false)
+  const processed = useRef(null)
+  // De foto van deze kaart; wordt vervangen bij "Opnieuw fotograferen".
+  const [file, setFile] = useState(scan.file)
 
   useEffect(() => {
-    const url = URL.createObjectURL(scan.file)
+    const url = URL.createObjectURL(file)
     setPreview(url)
     return () => URL.revokeObjectURL(url)
-  }, [scan.file])
+  }, [file])
 
   useEffect(() => {
-    if (started.current) return
-    started.current = true
+    if (processed.current === file) return
+    processed.current = file
     ;(async () => {
       let blob
       try {
-        blob = await shrinkImage(scan.file)
+        blob = await shrinkImage(file)
       } catch {
         setState('error')
         setMessage('Dit bestand is geen leesbare foto')
@@ -107,7 +109,22 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
       onStatus?.(scan.id, kind, msg)
       if (fields?.unit) checkDupe(fields.unit)
     })()
-  }, [scan.file, userId]) // eslint-disable-line react-hooks/exhaustive-deps -- bewust één keer per foto
+  }, [file, userId]) // eslint-disable-line react-hooks/exhaustive-deps -- bewust één keer per foto
+
+  // Nieuwe foto voor dezelfde kaart: oude foto weg, opnieuw uitlezen. Locatie blijft staan.
+  function retake(e) {
+    const next = e.target.files?.[0]
+    e.target.value = ''
+    if (!next) return
+    const old = photoPath.current
+    photoPath.current = null
+    if (old) supabase.storage.from(PHOTO_BUCKET).remove([old])
+    setDupe(null)
+    setDoubt(new Set())
+    setState('busy')
+    setMessage('Nieuwe foto lezen')
+    setFile(next)
+  }
 
   // Meld bruikbare kaarten aan bij "Alles opslaan"; altijd met de laatste formulierwaarden.
   const saveRef = useRef(null)
@@ -186,6 +203,10 @@ export default function ScanCard({ scan, userId, onDone, onToast, onReady, onSta
               </p>
             )}
             <div className="row-actions">
+              <label className={`btn retake ${state === 'error' || state === 'wrong' ? 'urgent' : ''}`}>
+                <input type="file" id={`${scan.id}-retake`} accept="image/*" capture="environment" onChange={retake} disabled={saving} />
+                Opnieuw fotograferen
+              </label>
               {state === 'wrong' ? (
                 <>
                   <button className="primary" onClick={discard} disabled={saving}>Weggooien</button>

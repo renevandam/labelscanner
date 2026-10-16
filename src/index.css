@@ -161,3 +161,9 @@ table.users { min-width: 620px }
 table.users td { font-family: var(--f-body) }
 table.users select { padding: 4px 6px; min-height: 32px; font-size: .85rem }
 .you { color: var(--muted) }
+
+/* "Opnieuw fotograferen" als knop */
+label.btn { position: relative; display: inline-flex; align-items: center; justify-content: center; font: 600 .95rem var(--f-body); border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px 14px; cursor: pointer; min-height: 44px }
+label.btn input { position: absolute; opacity: 0; width: 1px; height: 1px }
+label.btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px }
+label.retake.urgent { border-color: var(--bad); color: var(--bad) }
