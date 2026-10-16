@@ -233,8 +233,11 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
     }
   }
 
+  // Beheerder: alle bewerkbare kolommen. Klant: alleen Notitie klant.
+  const canEditCol = (col) => !col.readOnly && (isEditor || (isCustomer && col.key === 'klant_notitie'))
+
   function startEdit(r, col) {
-    if (!isEditor || col.readOnly) return
+    if (!canEditCol(col)) return
     const v = col.type === 'date' ? formatNlDate(r[col.key]) : r[col.key] ?? ''
     setEditing({ id: r.id, key: col.key, value: String(v), original: String(v) })
   }
@@ -247,9 +250,16 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
     const col = COLUMNS.find((c) => c.key === e.key)
     const { value, error } = parseEdit(col, e.value, t)
     if (error) return showToast(error)
-    const { data, error: dbErr } = await supabase.from('labels').update({ [e.key]: value }).eq('id', e.id).select(COLS).single()
-    if (dbErr) return showToast(t('list.changeFailed', { msg: dbErr.message }))
-    setRows((rs) => rs.map((r) => (r.id === e.id ? data : r)))
+    if (e.key === 'klant_notitie') {
+      // Via een aparte functie, zodat klanten verder niets kunnen wijzigen.
+      const { data: note, error: rpcErr } = await supabase.rpc('label_set_customer_note', { p_id: e.id, p_note: value ?? '' })
+      if (rpcErr) return showToast(t('list.changeFailed', { msg: rpcErr.message }))
+      setRows((rs) => rs.map((r) => (r.id === e.id ? { ...r, klant_notitie: note } : r)))
+    } else {
+      const { data, error: dbErr } = await supabase.from('labels').update({ [e.key]: value }).eq('id', e.id).select(COLS).single()
+      if (dbErr) return showToast(t('list.changeFailed', { msg: dbErr.message }))
+      setRows((rs) => rs.map((r) => (r.id === e.id ? data : r)))
+    }
     showToast(t('list.changed', { f: t(`field.${col.key}`) }))
   }
 
@@ -343,7 +353,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
         <div style={{ width: scrollW, height: 1 }} />
       </div>
       <div className="tablebox" ref={boxRef} onScroll={(e) => syncFrom(e.currentTarget, topRef.current)}>
-        <table className={isEditor ? 'editable' : undefined}>
+        <table className={isEditor || isCustomer ? 'editable' : undefined}>
           <thead>
             <tr>
               {canToggle && (
@@ -405,7 +415,7 @@ export default function LabelTable({ isEditor, isCustomer, reloadKey, showToast 
                   return (
                     <td
                       key={c.key}
-                      className={isEditor && !c.readOnly ? 'cell-edit' : undefined}
+                      className={canEditCol(c) ? 'cell-edit' : undefined}
                       onClick={() => !isEdit && startEdit(r, c)}
                     >
                       {isEdit ? (
