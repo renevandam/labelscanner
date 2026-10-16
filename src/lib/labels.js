@@ -1,5 +1,6 @@
 // Velden zoals ze op de TKE-sticker staan, in kolomvolgorde voor scherm en Excel.
 export const FIELDS = [
+  { key: 'locatie', label: 'Locatie', type: 'text' },
   { key: 'project', label: 'Project#', type: 'text' },
   { key: 'intern_order', label: 'Intern order#', type: 'text' },
   { key: 'unit', label: 'Unit#', type: 'text' },

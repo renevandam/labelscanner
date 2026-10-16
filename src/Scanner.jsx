@@ -2,14 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, PHOTO_BUCKET } from './lib/supabase.js'
 import { FIELDS, formatNlDate } from './lib/labels.js'
 import ScanCard from './ScanCard.jsx'
+import LocationBar from './LocationBar.jsx'
 
 const PAGE = 100
-const COLS = 'id, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, created_at, scanned_by_email'
+const COLS = 'id, locatie, project, intern_order, unit, datum, coordinator, doos, lengte, pallet, rol, kabel, notitie, photo_path, created_at, scanned_by_email'
 
 function applySearch(q, term) {
   const t = term.trim().replace(/[,%()]/g, ' ').trim()
   if (!t) return q
-  return q.or(`unit.ilike.%${t}%,project.ilike.%${t}%,intern_order.ilike.%${t}%`)
+  return q.or(`unit.ilike.%${t}%,project.ilike.%${t}%,intern_order.ilike.%${t}%,locatie.ilike.%${t}%`)
 }
 
 export default function Scanner({ session }) {
@@ -23,6 +24,13 @@ export default function Scanner({ session }) {
   const [toast, setToast] = useState('')
   const [armed, setArmed] = useState(null)
   const toastTimer = useRef()
+  const [location, setLocationState] = useState(() => {
+    try { return localStorage.getItem('labelscanner.locatie') || '' } catch { return '' }
+  })
+  const setLocation = useCallback((v) => {
+    setLocationState(v)
+    try { localStorage.setItem('labelscanner.locatie', v) } catch { /* privé-modus */ }
+  }, [])
 
   const showToast = useCallback((msg) => {
     setToast(msg)
@@ -50,7 +58,8 @@ export default function Scanner({ session }) {
   function onFiles(e) {
     const files = [...e.target.files]
     e.target.value = ''
-    setScans((s) => [...files.map((file) => ({ id: crypto.randomUUID(), file })), ...s])
+    if (!location) showToast('Let op: geen locatie ingesteld. Vul hem in bij de doos of scan eerst de plank.')
+    setScans((s) => [...files.map((file) => ({ id: crypto.randomUUID(), file, location })), ...s])
   }
 
   function onScanDone(id, saved) {
@@ -115,6 +124,8 @@ export default function Scanner({ session }) {
         </div>
       </header>
 
+      <LocationBar location={location} onChange={setLocation} />
+
       <div className="actions">
         <label className="scan">
           <input type="file" id="cam" accept="image/*" capture="environment" multiple onChange={onFiles} />
@@ -138,7 +149,7 @@ export default function Scanner({ session }) {
         <div className="listhead">
           <h2>Gescande labels {total != null && <span className="count">{total}</span>}</h2>
           <div className="list-tools">
-            <input id="search" type="search" placeholder="Zoek unit, project of order" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input id="search" type="search" placeholder="Zoek unit, project, order of locatie" value={search} onChange={(e) => setSearch(e.target.value)} />
             <button className="primary" onClick={doExport} disabled={exporting || !total}>
               {exporting ? 'Bezig…' : search ? 'Excel (gefilterd)' : 'Excel downloaden'}
             </button>

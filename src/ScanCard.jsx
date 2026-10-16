@@ -7,7 +7,7 @@ import { shrinkImage, blobToBase64 } from './lib/image.js'
 export default function ScanCard({ scan, userId, onDone, onToast }) {
   const [state, setState] = useState('busy') // busy | ready | error
   const [message, setMessage] = useState('Label lezen')
-  const [form, setForm] = useState(emptyLabel)
+  const [form, setForm] = useState(() => ({ ...emptyLabel(), locatie: scan.location || '' }))
   const [preview, setPreview] = useState('')
   const [saving, setSaving] = useState(false)
   const [dupe, setDupe] = useState(null)
@@ -44,7 +44,8 @@ export default function ScanCard({ scan, userId, onDone, onToast }) {
           if (error || !data?.fields) throw error || new Error('leeg antwoord')
           const f = emptyLabel()
           for (const k of Object.keys(f)) f[k] = data.fields[k] == null ? '' : String(data.fields[k])
-          setForm(f)
+          // Locatie komt van de plank-scan, niet van de sticker; eventuele handmatige wijziging blijft staan.
+          setForm((prev) => ({ ...f, locatie: prev.locatie }))
           const filled = FIELDS.some((x) => f[x.key])
           setState('ready')
           setMessage(filled ? 'Gelezen. Controleer de velden en sla op.' : 'Niets herkend. Vul de velden zelf in.')
