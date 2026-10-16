@@ -101,6 +101,33 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
   const [editing, setEditing] = useState(null) // { id, key, value }
   const [exporting, setExporting] = useState(false)
   const query = useRef({ search: '', filters: {} })
+
+  // Schuifbalk boven de tabel die gelijk loopt met de onderste.
+  const boxRef = useRef(null)
+  const topRef = useRef(null)
+  const [scrollW, setScrollW] = useState(0)
+  const [overflow, setOverflow] = useState(false)
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box) return
+    const measure = () => {
+      setScrollW(box.scrollWidth)
+      setOverflow(box.scrollWidth > box.clientWidth + 1)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(box)
+    if (box.firstElementChild) ro.observe(box.firstElementChild)
+    return () => ro.disconnect()
+  }, [])
+  const syncing = useRef(false)
+  function syncFrom(src, dst) {
+    if (syncing.current) { syncing.current = false; return }
+    if (dst && dst.scrollLeft !== src.scrollLeft) {
+      syncing.current = true
+      dst.scrollLeft = src.scrollLeft
+    }
+  }
   // Namen van leden (user_id → naam) voor de kolom "Door"; één kleine query.
   const [people, setPeople] = useState({})
   const peopleRef = useRef({})
@@ -261,7 +288,10 @@ export default function LabelTable({ isEditor, reloadKey, showToast }) {
 
       {isEditor && <p className="hint">Klik op een cel om hem te wijzigen. Enter slaat op, Esc annuleert.</p>}
 
-      <div className="tablebox">
+      <div className="topscroll" ref={topRef} hidden={!overflow} aria-hidden="true" onScroll={(e) => syncFrom(e.currentTarget, boxRef.current)}>
+        <div style={{ width: scrollW, height: 1 }} />
+      </div>
+      <div className="tablebox" ref={boxRef} onScroll={(e) => syncFrom(e.currentTarget, topRef.current)}>
         <table className={isEditor ? 'editable' : undefined}>
           <thead>
             <tr>

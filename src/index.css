@@ -171,3 +171,11 @@ label.retake.urgent { border-color: var(--bad); color: var(--bad) }
 table.users { min-width: 760px }
 table.users .name-input { font-family: var(--f-body); min-width: 130px; padding: 5px 7px; background: transparent; border-color: transparent }
 table.users .name-input:hover, table.users .name-input:focus { background: var(--bg); border-color: var(--line) }
+
+/* Extra horizontale schuifbalk boven de tabel */
+.topscroll { overflow-x: auto; overflow-y: hidden; height: 16px; margin-bottom: -6px }
+.list { gap: 10px }
+/* Schuifbalken altijd zichtbaar (macOS/iOS verbergen ze anders tot je scrolt) */
+.topscroll::-webkit-scrollbar, .tablebox::-webkit-scrollbar { height: 10px }
+.topscroll::-webkit-scrollbar-thumb, .tablebox::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px }
+.topscroll::-webkit-scrollbar-track, .tablebox::-webkit-scrollbar-track { background: transparent }
